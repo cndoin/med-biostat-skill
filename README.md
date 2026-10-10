@@ -213,5 +213,7 @@ python scripts/trigger_check.py    # 自动触发覆盖（29 正向 / 4 负向�
 
 本项目使用 **MIT License**，见 [`LICENSE`](LICENSE)。
 
-内嵌的第三方组件保留其原始许可（Unlicense / BSD-3-Clause / MIT），
-许可全文随源码置于各 `vendor/_*/LICENSE`，来源与归属见 [`vendor/ATTRIBUTION.md`](vendor/ATTRIBUTION.md)。
+内嵌的第三方组件保留其原始许可（Unlicense / BSD-3-Clause / MIT）：
+许可全文随源码置于各 `vendor/_*/LICENSE`，汇总清单见
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)，
+来源与哈希的完整记录见 [`vendor/ATTRIBUTION.md`](vendor/ATTRIBUTION.md)。
