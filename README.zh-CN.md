@@ -10,7 +10,8 @@
 [![版本](https://img.shields.io/badge/version-1.7.0-0d9488)](VERSION)
 [![许可证: MIT](https://img.shields.io/badge/License-MIT-8b5cf6.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-2563eb)](#环境要求)
-[![自检](https://img.shields.io/badge/self--check-212%20%2F%20215-16a34a)](tests/run_all.py)
+[![自检](https://img.shields.io/badge/self--check-216%20%2F%20219-16a34a)](tests/run_all.py)
+[![Checks](https://github.com/cndoin/med-biostat-skill/actions/workflows/checks.yml/badge.svg)](https://github.com/cndoin/med-biostat-skill/actions/workflows/checks.yml)
 [![Agent](https://img.shields.io/badge/agents-Claude%20Code%20%7C%20Codex%20%7C%20WorkBuddy%20%7C%20Cursor-18181b)](#装进你的-ai-助手)
 
 [English](README.md) · **简体中文** · [日本語](README.ja.md)
@@ -198,7 +199,7 @@ med-biostat-skill/
 ## 自检与质量门
 
 ```bash
-python tests/run_all.py            # 全量：212 / 215 通过（3 项因缺 lifelines 跳过）
+python tests/run_all.py            # 全量：216 / 219 通过（3 项因缺 lifelines 跳过）
 python tests/run_all.py --json     # 机器可读
 python scripts/capabilities.py     # 双层能力报告
 python scripts/trigger_check.py    # 自动触发覆盖（29 正向 / 4 负向）

@@ -10,7 +10,8 @@
 [![Version](https://img.shields.io/badge/version-1.7.0-0d9488)](VERSION)
 [![License: MIT](https://img.shields.io/badge/License-MIT-8b5cf6.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-2563eb)](#requirements)
-[![Self-check](https://img.shields.io/badge/self--check-212%20%2F%20215-16a34a)](tests/run_all.py)
+[![Self-check](https://img.shields.io/badge/self--check-216%20%2F%20219-16a34a)](tests/run_all.py)
+[![Checks](https://github.com/cndoin/med-biostat-skill/actions/workflows/checks.yml/badge.svg)](https://github.com/cndoin/med-biostat-skill/actions/workflows/checks.yml)
 [![Agents](https://img.shields.io/badge/agents-Claude%20Code%20%7C%20Codex%20%7C%20WorkBuddy%20%7C%20Cursor-18181b)](#install-into-your-ai-agent)
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
@@ -193,7 +194,7 @@ med-biostat-skill/
 ## Self-check and quality gates
 
 ```bash
-python tests/run_all.py            # 212 / 215 pass (3 skipped: lifelines not installed)
+python tests/run_all.py            # 216 / 219 pass (3 skipped: lifelines not installed)
 python tests/run_all.py --json     # machine readable
 python scripts/capabilities.py     # two-tier capability report
 python scripts/trigger_check.py    # auto-trigger coverage (29 positive / 4 negative)

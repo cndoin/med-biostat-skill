@@ -10,7 +10,8 @@
 [![Version](https://img.shields.io/badge/version-1.7.0-0d9488)](VERSION)
 [![License: MIT](https://img.shields.io/badge/License-MIT-8b5cf6.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-2563eb)](#動作要件)
-[![Self-check](https://img.shields.io/badge/self--check-212%20%2F%20215-16a34a)](tests/run_all.py)
+[![Self-check](https://img.shields.io/badge/self--check-216%20%2F%20219-16a34a)](tests/run_all.py)
+[![Checks](https://github.com/cndoin/med-biostat-skill/actions/workflows/checks.yml/badge.svg)](https://github.com/cndoin/med-biostat-skill/actions/workflows/checks.yml)
 [![Agents](https://img.shields.io/badge/agents-Claude%20Code%20%7C%20Codex%20%7C%20WorkBuddy%20%7C%20Cursor-18181b)](#ai-エージェントへのインストール)
 
 [English](README.md) · [简体中文](README.zh-CN.md) · **日本語**
@@ -193,7 +194,7 @@ med-biostat-skill/
 ## セルフチェックと品質ゲート
 
 ```bash
-python tests/run_all.py            # 212 / 215 通過（3 件は lifelines 未導入のためスキップ）
+python tests/run_all.py            # 216 / 219 通過（3 件は lifelines 未導入のためスキップ）
 python tests/run_all.py --json     # 機械可読
 python scripts/capabilities.py     # 2 層の能力レポート
 python scripts/trigger_check.py    # 自動トリガー範囲（29 ポジティブ / 4 ネガティブ）
