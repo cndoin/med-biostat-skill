@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 150" width="800" height="150" role="img" aria-label="biostat-copilot">
+  <title>biostat-copilot</title>
+  <g>
+    <circle cx="76" cy="75" r="48" fill="#0d9488" opacity="0.08"/>
+  </g>
+  <g fill="none" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="3 3">
+    <path d="M76 43 L76 75"/>
+    <path d="M76 75 L108 93"/>
+    <path d="M76 75 L44 93"/>
+  </g>
+  <g>
+    <circle cx="76" cy="75" r="28" fill="none" stroke="#0d9488" stroke-width="3"/>
+    <circle cx="76" cy="75" r="6.5" fill="#0d9488"/>
+    <circle cx="76" cy="43" r="5.5" fill="#2563eb"/>
+    <circle cx="108" cy="93" r="5.5" fill="#38bdf8"/>
+    <circle cx="44" cy="93" r="5.5" fill="#14b8a6"/>
+  </g>
+  <text x="152" y="71" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="42" font-weight="700" fill="#0f172a" letter-spacing="-0.6">biostat-copilot</text>
+  <text x="154" y="103" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="15" fill="#64748b">Evidence-first bioinformatics &amp; medical research skill for AI agents</text>
+</svg>
