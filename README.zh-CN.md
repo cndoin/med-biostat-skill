@@ -5,7 +5,7 @@
   <img src="assets/brand.svg" alt="biostat-copilot" width="760">
 </picture>
 
-**面向生信与医学研究的「证据优先」工作流技能 —— 37 个主流分析法，AI 直接可跑。**
+**面向生信与医学研究的「证据优先」工作流技能 —— 41 个主流分析法，AI 直接可跑。**
 
 [![版本](https://img.shields.io/badge/version-1.7.0-0d9488)](VERSION)
 [![许可证: MIT](https://img.shields.io/badge/License-MIT-8b5cf6.svg)](LICENSE)
@@ -53,6 +53,7 @@
 | 临床统计与建模 | 11 | 生存分析、竞争风险 CIF、预测模型（校准 + DCA）、C-index / NRI / IDI、正则化回归（LASSO / Cox-LASSO）、Meta 分析、发表偏倚、多重插补 MICE、多重检验校正、混合效应、样本量与功效 |
 | 数据工程与眼科 | 4 | 数据清洗与变量挑选、IOL 屈光计算、视力 / 屈光结局、晶状体基因集富集 |
 | 预处理与细胞互作 | 2 | ComBat 批次效应校正、细胞通讯（配受体） |
+| 扩展方法 | 4 | 基因-环境交互（G×E）、EWAS 甲基化差异、双向 / 中介 MR、细胞类型注释 |
 
 每个分析法的入口函数、关键口径、典型错误见 [`SKILL.md`](SKILL.md) 的「分析法总表」。
 
@@ -144,7 +145,7 @@ python scripts/install_adapters.py --target all --project /path/to/proj
 | 层 | 位置 | 依赖 | 能做什么 |
 |---|---|---|---|
 | **Tier 0** | `scripts/` | Python 标准库 | 取回 / 核验 / 质控 / 位点计数 / 可信集过滤 / 区间注释 / 混杂审计 / 逐变异互证 / 报告门禁 |
-| **Tier 1** | `vendor/` + `lib/` | numpy + pandas + scipy | 37 个分析法中的绝大多数；纯 SVG 图表；函数注册表；报告规范对表 |
+| **Tier 1** | `vendor/` + `lib/` | numpy + pandas + scipy | 41 个分析法中的绝大多数；纯 SVG 图表；函数注册表；报告规范对表 |
 | **原生加速层** | `vendor/native/` | 无（单文件可执行） | 百万级 GWAS 汇总统计流式质控（3M 行 551 ms，约 11× Python） |
 
 `Tier 1` 的 22 个模块是**逐个探测可导入性**的：缺一个依赖不影响其余模块被判为可用。
@@ -180,7 +181,7 @@ python scripts/install_adapters.py --target all --project /path/to/proj
 
 ```
 med-biostat-skill/
-├── SKILL.md              入口总纲（路由 · 红线 · 判定门 · 37 个分析法总表）
+├── SKILL.md              入口总纲（路由 · 红线 · 判定门 · 41 个分析法总表）
 ├── VERSION
 ├── README.md             English
 ├── README.zh-CN.md       简体中文（本文件）

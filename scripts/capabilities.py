@@ -80,6 +80,9 @@ TIER1 = {
     "lib.power": "样本量与功效 + 诊断准确性：两均值/两率/生存/相关 + ROC·LR·DOR·Youden",
     "lib.batch": "批次效应校正：ComBat 经验贝叶斯(位置+尺度)、参考批次模式、批次混杂诊断（源：scanpy，BSD-3）",
     "lib.cellcomm": "细胞通讯：配受体互作均值 + 置换 p 值 + 阳性比例 + 通路归类（源：CellPhoneDB，MIT）",
+    # —— v1.7 后续：扩展方法（公开标准方法，非自造）——
+    "lib.gxe": "G×E 交互：交互项检验 / 分层效应 / Johnson-Neyman 区间 / 相加交互 RERI·AP·S",
+    "lib.epigen": "EWAS 甲基化：beta⇄M 转换 / limma 式 moderated t 差异甲基化 / DMP 汇总 / 细胞组成代理",
 }
 # 每个分析法模块的**可导入性**逐项探测（不靠 tier1_ready 一刀切：
 # 某个模块缺依赖时，其余模块必须照常报可用，否则会误报「功能缺失」）
@@ -87,7 +90,7 @@ LIB_MODULES = [
     "increment", "competing", "mixed", "impute", "mr_full", "ophtha", "prep",
     "network", "singlecell", "pathway", "immune", "regularized", "meta",
     "causal", "prs", "finemap", "mutational", "spatial", "trajectory", "power",
-    "batch", "cellcomm",
+    "batch", "cellcomm", "gxe", "epigen",
 ]
 ZERO_DEP_IN_VENDOR = {
     "registry": "函数注册表（中英文检索 + 前置校验，纯标准库）",

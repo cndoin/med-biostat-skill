@@ -1,8 +1,8 @@
 {
   "ok": true,
-  "summary": "biostat-copilot v1.7.0 自检：216/219 通过",
-  "total": 219,
-  "passed": 216,
+  "summary": "biostat-copilot v1.7.0 自检：226/229 通过",
+  "total": 229,
+  "passed": 226,
   "failures": 0,
   "errors": 0,
   "skipped": 3,

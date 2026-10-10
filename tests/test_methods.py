@@ -807,6 +807,210 @@ class TestCellComm(unittest.TestCase):
         self.assertIn("RAISED True", out)
 
 
+class TestGxE(unittest.TestCase):
+    """G×E 交互（公开标准方法）。"""
+
+    def test_interaction_detected_and_centering_invariant(self):
+        """定向：真交互必须检出；中心化只改主效应、**不改交互项**。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import gxe as G\n"
+            "rng=np.random.default_rng(0); n=800\n"
+            "g=rng.normal(size=n); e=rng.normal(size=n)\n"
+            "y=0.5*g+0.3*e+0.8*g*e+rng.normal(0,1,n)\n"
+            "r=G.interaction_test(y,g,e)\n"
+            "r2=G.interaction_test(y,g,e,center=False)\n"
+            "y0=0.5*g+0.3*e+rng.normal(0,1,n)\n"
+            "r3=G.interaction_test(y0,g,e)\n"
+            "print('BETA',round(r['beta_interaction'],3))\n"
+            "print('P',r['pvalue'])\n"
+            "print('CENTER_DIFF',abs(r['beta_interaction']-r2['beta_interaction']))\n"
+            "print('NULL_P',r3['pvalue'])\n")
+        out_l = out.splitlines()
+        beta = float([l for l in out_l if l.startswith("BETA")][0].split()[-1])
+        p = float([l for l in out_l if l.startswith("P ")][0].split()[-1])
+        cdiff = float([l for l in out_l if l.startswith("CENTER_DIFF")][0].split()[-1])
+        nullp = float([l for l in out_l if l.startswith("NULL_P")][0].split()[-1])
+        self.assertAlmostEqual(beta, 0.8, delta=0.15, msg="真交互 0.8 应被估回")
+        self.assertLess(p, 1e-6)
+        self.assertLess(cdiff, 1e-9, "中心化不应改变交互项（重要的不变性）")
+        self.assertGreater(nullp, 0.05, "无交互时不应显著")
+
+    def test_reri_detects_super_additive(self):
+        """定向：构造超相加数据，RERI 的 95%CI 必须不含 0。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import gxe as G\n"
+            "rng=np.random.default_rng(1); n=2000\n"
+            "g=rng.integers(0,2,n); e=rng.integers(0,2,n)\n"
+            "p=np.clip(0.05+0.05*g+0.05*e+0.25*g*e,0,1)\n"
+            "case=(rng.random(n)<p).astype(int)\n"
+            "r=G.reri_additive_interaction(case,g,e)\n"
+            "print('RERI',round(r['RERI'],3))\n"
+            "print('LO',round(r['RERI_ci95'][0],3))\n")
+        vals = {l.split()[0]: float(l.split()[-1]) for l in out.splitlines()
+                if l.split()[0] in ("RERI", "LO")}
+        self.assertGreater(vals["RERI"], 0, "超相加数据的 RERI 应为正")
+        self.assertGreater(vals["LO"], 0, "RERI 的 CI 下限应 >0（即显著）")
+
+    def test_negative_continuous_input_raises_for_reri(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import gxe as G\n"
+            "rng=np.random.default_rng(2)\n"
+            "case=rng.integers(0,2,200)\n"
+            "try:\n"
+            "    G.reri_additive_interaction(case, rng.normal(size=200),\n"
+            "                                rng.integers(0,2,200))\n"
+            "    print('RAISED False')\n"
+            "except Exception: print('RAISED True')\n")
+        self.assertIn("RAISED True", out)
+
+
+class TestEpigen(unittest.TestCase):
+    """EWAS 甲基化差异（limma 式 moderated t，按论文实现）。"""
+
+    def test_m_value_roundtrip(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import epigen as E\n"
+            "b=np.array([0.1,0.3,0.5,0.7,0.9])\n"
+            "print('ERR',float(np.abs(E.m_to_beta(E.beta_to_m(b))-b).max()))\n")
+        err = float([l for l in out.splitlines() if l.startswith("ERR")][0].split()[-1])
+        self.assertLess(err, 1e-12)
+
+    def test_dmp_recovery_and_false_positive_control(self):
+        """定向：真 DMP 必须被检出；纯噪声下不得有 DMP（假阳性控制）。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import epigen as E\n"
+            "rng=np.random.default_rng(11); n=60; m=400\n"
+            "grp=np.array([0]*30+[1]*30)\n"
+            "B=np.clip(0.5+rng.normal(0,0.06,(n,m)),0.01,0.99)\n"
+            "B[grp==1,:30]=np.clip(B[grp==1,:30]+0.25,0.01,0.99)\n"
+            "r=E.diff_methylation(B,grp); s=E.dmp_summary(r)\n"
+            "sig=r['table'][r['table']['padj']<0.05]\n"
+            "tp=sum(int(c[3:])<30 for c in sig['cpg'])\n"
+            "B0=np.clip(0.5+rng.normal(0,0.06,(n,m)),0.01,0.99)\n"
+            "s0=E.dmp_summary(E.diff_methylation(B0,grp))\n"
+            "print('TP',tp)\n"
+            "print('NDMP',s['n_dmp'])\n"
+            "print('FALSE_POS',s0['n_dmp'])\n"
+            "print('D0',round(r['d0'],2))\n")
+        vals = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        self.assertGreaterEqual(int(vals["TP"]), 28, "30 个真 DMP 应基本全检出")
+        self.assertEqual(int(vals["FALSE_POS"]), 0, "纯噪声下不应有假阳性 DMP")
+
+    def test_negative_multiclass_group_raises(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import epigen as E\n"
+            "B=np.random.default_rng(0).random((30,50))\n"
+            "try:\n"
+            "    E.diff_methylation(B, np.array(['a','b','c']*10))\n"
+            "    print('RAISED False')\n"
+            "except Exception: print('RAISED True')\n")
+        self.assertIn("RAISED True", out)
+
+
+class TestMRExtensions(unittest.TestCase):
+    """双向 MR 与两步法中介 MR。"""
+
+    def test_bidirectional_hint_logic(self):
+        """正向真、反向假 → 提示「仅正向」；双向都真 → 提示可能反向或多效性。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import mr_full as M\n"
+            "rng=np.random.default_rng(3); n=10\n"
+            "def mk(eff):\n"
+            "    bx=np.abs(rng.normal(0.2,0.05,n)); sx=np.abs(rng.normal(0.02,0.005,n))\n"
+            "    by=bx*eff+rng.normal(0,0.005,n); sy=np.abs(rng.normal(0.03,0.005,n))\n"
+            "    return {'bx':bx,'sx':sx,'by':by,'sy':sy}\n"
+            "r=M.bidirectional(mk(0.5), mk(0.0))\n"
+            "print('HINT1', r['reverse_flag'])\n"
+            "r2=M.bidirectional(mk(0.5), mk(0.5))\n"
+            "print('HINT2', r2['reverse_flag'])\n")
+        h1 = [l for l in out.splitlines() if l.startswith("HINT1")][0].split()[-1]
+        h2 = [l for l in out.splitlines() if l.startswith("HINT2")][0].split()[-1]
+        self.assertEqual(h1, "forward_only", "正向真反向假 → 应报 forward_only")
+        self.assertEqual(h2, "both_significant", "双向都真 → 应报 both_significant")
+
+    def test_mediation_delta_matches_hand_calculation(self):
+        """定向：间接效应 = β₁×β₂；delta 法 SE 与手算一致。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import mr_full as M\n"
+            "r=M.two_step_mediation(0.30,0.05,0.40,0.08,b_total=0.20,se_total=0.06)\n"
+            "manual=0.30*0.40\n"
+            "se=np.sqrt((0.40**2)*(0.05**2)+(0.30**2)*(0.08**2))\n"
+            "print('IND',r['indirect'])\n"
+            "print('MANUAL',manual)\n"
+            "print('SE_DIFF',abs(r['se']-se))\n"
+            "print('PROP',round(r['proportion_mediated'],4))\n"
+            "z=M.two_step_mediation(0.30,0.05,0.0,0.08)\n"
+            "print('NULL_P',z['pvalue'])\n")
+        v = {l.split()[0]: float(l.split()[-1]) for l in out.splitlines() if l.split()}
+        self.assertAlmostEqual(v["IND"], v["MANUAL"], places=10)
+        self.assertLess(v["SE_DIFF"], 1e-12)
+        self.assertAlmostEqual(v["PROP"], 0.6, places=4)
+        self.assertGreater(v["NULL_P"], 0.9, "中介效应为 0 时应不显著")
+
+
+class TestCellAnnotation(unittest.TestCase):
+    """基于 marker 的细胞类型注释。"""
+
+    def test_annotates_true_clusters(self):
+        """定向：三个真 cluster 必须被注释成正确的类型。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np, pandas as pd\n"
+            "from lib import singlecell as SC\n"
+            "rng=np.random.default_rng(5)\n"
+            "mk={'T cell':['CD3D','CD3E','CD2'],'B cell':['CD19','MS4A1','CD79A'],\n"
+            "    'Monocyte':['LYZ','CD14','FCGR3A']}\n"
+            "genes=[g for v in mk.values() for g in v]+[f'G{i}' for i in range(40)]\n"
+            "df=pd.DataFrame(np.abs(rng.normal(1.0,0.3,(150,len(genes)))),columns=genes)\n"
+            "lab=np.array(['c0']*50+['c1']*50+['c2']*50)\n"
+            "for cl,ct in [('c0','T cell'),('c1','B cell'),('c2','Monocyte')]:\n"
+            "    df.loc[lab==cl, mk[ct]] += 4.0\n"
+            "r=SC.annotate_cells(df,lab,mk)\n"
+            "for cl in ['c0','c1','c2']:\n"
+            "    print('ANN', cl, r['annotation'][cl]['type'].replace(' ','_'),\n"
+            "          int(r['annotation'][cl]['ambiguous']))\n")
+        ann = {}
+        for l in out.splitlines():
+            if l.startswith("ANN"):
+                _, cl, t, amb = l.split()
+                ann[cl] = (t, int(amb))
+        self.assertEqual(ann["c0"][0], "T_cell")
+        self.assertEqual(ann["c1"][0], "B_cell")
+        self.assertEqual(ann["c2"][0], "Monocyte")
+        self.assertEqual(sum(a[1] for a in ann.values()), 0, "真 cluster 不应标为不确定")
+
+    def test_negative_unmatched_markers_raise(self):
+        """负向：marker 一个都没匹配上必须报错，不能静默返回 0 分。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np, pandas as pd\n"
+            "from lib import singlecell as SC\n"
+            "df=pd.DataFrame(np.random.default_rng(0).random((30,20)),\n"
+            "                columns=[f'g{i}' for i in range(20)])\n"
+            "try:\n"
+            "    SC.annotate_cells(df, np.array(['a']*15+['b']*15),\n"
+            "                      {'X': ['NOTGENE1','NOTGENE2']})\n"
+            "    print('RAISED False')\n"
+            "except Exception: print('RAISED True')\n")
+        self.assertIn("RAISED True", out)
+
+
 class TestAttributionHonesty(unittest.TestCase):
     """溯源必须如实：新增来源要登记，许可不得虚报。"""
 

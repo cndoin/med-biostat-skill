@@ -16,6 +16,17 @@
   ⚠️ 验证到"正反算闭合 / 眼轴单调 / 四公式极差符合文献 / Haigis 对上公开算例"；
   **未**与厂商在线计算器逐例对拍，**临床决策前须用机构计算器复核**。
 
+- **扩展方法 4 个**（分析法总数 37 → **41**）：
+  · `lib/gxe.py` —— **G×E 基因-环境交互**：交互项检验、分层效应、Johnson–Neyman 区间、
+    相加交互 RERI / AP / S（Rothman）
+  · `lib/epigen.py` —— **EWAS 甲基化差异**：beta ⇄ M 值转换、limma 式 moderated t
+    （按 Smyth 2004 论文实现，limma 本身是 LGPL 不内嵌）、DMP 汇总、细胞组成粗代理
+  · `lib/mr_full.py` —— **双向 MR** 与 **两步法中介 MR**（间接效应 delta 法；
+    反向分析必须用结局的独立 IV）
+  · `lib/singlecell.py::annotate_cells` —— **细胞类型注释**（marker z-score 打分 +
+    不确定度标注；marker 全不匹配即报错）
+  新增 8 个单元测试（共 58 个 methods 用例），含定向值、不变性与负向用例。
+
 ## [1.7.0] — 2026-10-11
 
 首个公开版本。

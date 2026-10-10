@@ -25,7 +25,7 @@ MR-RAPS 的剖面似然、污染混合的网格搜索）都是易于写错、错
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence
 
 import numpy as np
 
@@ -34,7 +34,7 @@ from vendor._mr import sensitivity as _sens
 
 __all__ = [
     "ESTIMATORS", "SENSITIVITY", "run_all", "estimate", "diagnose",
-    "harmonize_data",
+    "harmonize_data", "bidirectional", "two_step_mediation",
 ]
 
 
@@ -187,3 +187,119 @@ def harmonize_data(exposure, outcome):
     """
     from vendor._mr.harmonize import harmonize
     return harmonize(exposure, outcome)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 扩展分析：双向 MR 与两步法中介 MR
+# ══════════════════════════════════════════════════════════════════════════════
+# 这两个是**组合分析**，本身不含新的估计量——正向/反向都复用上面的 run_all
+# （源 pymr, Unlicense），中介的间接效应用 delta 法合成。方法学依据：
+#   · 双向 MR        —— Davey Smith G, Hemani G. *Hum Mol Genet* 2014;23(R1):R89-98
+#   · 两步法中介 MR  —— Burgess S, Daniel RM, Butterworth AS, Thompson SG.
+#                       *Eur J Epidemiol* 2015;30:543-52
+#                       （间接效应必须用 delta 法或 bootstrap 求 CI）
+
+
+def bidirectional(forward: Dict[str, Any], reverse: Dict[str, Any],
+                  **kw) -> Dict[str, Any]:
+    """双向 MR：正向 + 反向各跑一次，并提示是否存在**反向因果 / 水平多效性**信号。
+
+    :param forward: ``{"bx","sx","by","sy"}`` —— 暴露的工具变量对结局的效应
+    :param reverse: ``{"bx","sx","by","sy"}`` —— **结局的工具变量**对暴露的效应
+    :return: dict，含 ``forward`` / ``reverse`` 的 ``run_all`` 结果与 ``reverse_hint``
+
+    ⚠️ **反向 MR 不是「把数据反过来算一遍」**：必须用**结局的独立工具变量**
+       （在结局 GWAS 里达到全基因组显著、且满足 IV 假设的位点）。
+       拿同一批暴露 IV 反着算，只是把同一个估计换个写法，得不到任何新信息。
+
+    ⚠️ **双向都显著 ≠ 反向因果**。它同样可能来自**水平多效性**（一个 SNP 同时
+       影响两个性状）。要区分，得看反向分析里 IV 假设是否成立
+       （异质性、留一、与暴露的关联强度）。
+    """
+    # 允许用简写键 bx/sx/by/sy，内部映射到 run_all 的参数名
+    alias = {"bx": "beta_exp", "sx": "se_exp", "by": "beta_out", "sy": "se_out"}
+
+    def _norm(d: Dict[str, Any]) -> Dict[str, Any]:
+        return {alias.get(k, k): v for k, v in d.items()}
+
+    fwd = run_all(**_norm(forward), **kw)
+    rev = run_all(**_norm(reverse), **kw)
+
+    def _p(res: Dict[str, Any]):
+        """取主要结果（IVW）的 p 值。"""
+        pr = res.get("primary") or {}
+        return pr.get("pval", pr.get("pvalue"))
+
+    pf, pr = _p(fwd), _p(rev)
+    hint, flag = None, "undetermined"
+    if pf is not None and pr is not None:
+        if pf < 0.05 and pr < 0.05:
+            flag = "both_significant"
+            hint = ("双向均显著 —— 可能是反向因果，也可能是水平多效性；"
+                    "需用反向分析的异质性 / 留一 / 工具强度区分")
+        elif pf < 0.05:
+            flag = "forward_only"
+            hint = "仅正向显著 —— 未见反向因果提示"
+        else:
+            flag = "neither"
+            hint = "正向不显著 —— 主假设未获支持"
+    return {
+        "forward": fwd,
+        "reverse": rev,
+        "p_forward": pf,
+        "p_reverse": pr,
+        # 结构化标志：调用方应按它分支，不要去解析下面那句自然语言提示
+        "reverse_flag": flag,
+        "reverse_hint": hint,
+        "engine": "lib.mr_full.bidirectional",
+    }
+
+
+def two_step_mediation(b_step1: float, se_step1: float,
+                       b_step2: float, se_step2: float,
+                       b_total: Optional[float] = None,
+                       se_total: Optional[float] = None) -> Dict[str, Any]:
+    """两步法中介 MR：暴露 →（中介）→ 结局。
+
+    :param b_step1, se_step1: 第 1 步 MR —— 暴露对中介的效应
+    :param b_step2, se_step2: 第 2 步 MR —— 中介对结局的效应（**须调整暴露**）
+    :param b_total, se_total: 暴露对结局的**总效应**（给了才能算直接效应与中介比例）
+    :return: dict
+        - ``indirect`` / ``se`` / ``ci95`` / ``pvalue``：间接效应（delta 法）
+        - ``direct`` / ``proportion_mediated``：需要总效应
+        - ``method``：``"two-step MR, delta method"``
+
+    ⚠️ **间接效应必须用 delta 法或 bootstrap 求 CI**：``a×b`` 是两个估计的乘积，
+       **不服从正态分布**；用「a 的 CI 与 b 的 CI 是否含 0」来判断中介是错的
+       （这也是 Sobel 检验在小样本失真的原因）。
+    ⚠️ **两步法默认不存在暴露–中介交互**。若怀疑有交互（有调节的中介），
+       两步法会低估中介效应，需换用中介–调节拆解。
+    """
+    import numpy as _np
+    from scipy import stats as _st
+
+    indirect = float(b_step1) * float(b_step2)
+    se_ind = float(_np.sqrt((float(b_step2) ** 2) * float(se_step1) ** 2
+                            + (float(b_step1) ** 2) * float(se_step2) ** 2))
+    z = indirect / se_ind if se_ind > 0 else float("nan")
+    pval = float(2 * _st.norm.sf(abs(z))) if _np.isfinite(z) else float("nan")
+    out: Dict[str, Any] = {
+        "indirect": indirect,
+        "se": se_ind,
+        "ci95": (indirect - 1.96 * se_ind, indirect + 1.96 * se_ind),
+        "pvalue": pval,
+        "step1": float(b_step1),
+        "step2": float(b_step2),
+        "method": "two-step MR, delta method",
+        "engine": "lib.mr_full.two_step_mediation",
+    }
+    if b_total is not None:
+        direct = float(b_total) - indirect
+        out["total"] = float(b_total)
+        out["direct"] = direct
+        out["proportion_mediated"] = (indirect / float(b_total)
+                                      if float(b_total) != 0 else float("nan"))
+        if se_total is not None:
+            out["direct_ci95"] = (direct - 1.96 * float(se_total),
+                                  direct + 1.96 * float(se_total))
+    return out

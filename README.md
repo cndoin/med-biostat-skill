@@ -5,7 +5,7 @@
   <img src="assets/brand.svg" alt="biostat-copilot" width="760">
 </picture>
 
-**An evidence-first workflow skill for bioinformatics and medical research — 37 analysis methods that AI agents can actually run.**
+**An evidence-first workflow skill for bioinformatics and medical research — 41 analysis methods that AI agents can actually run.**
 
 [![Version](https://img.shields.io/badge/version-1.7.0-0d9488)](VERSION)
 [![License: MIT](https://img.shields.io/badge/License-MIT-8b5cf6.svg)](LICENSE)
@@ -51,6 +51,7 @@ So this skill treats **caliber as a first-class citizen**: a result without a st
 | Clinical stats & modelling | 11 | Survival analysis, competing risks (CIF), prediction models (calibration + DCA), C-index / NRI / IDI, regularized regression (LASSO / Cox-LASSO), meta-analysis, publication bias, MICE imputation, multiple-testing correction, mixed effects, power & sample size |
 | Data engineering & ophthalmology | 4 | Data cleaning & variable selection, IOL refractive calculation, visual acuity / refractive outcomes, lens gene-set enrichment |
 | Preprocessing & cell interaction | 2 | ComBat batch correction, cell–cell communication (ligand–receptor) |
+| Extended methods | 4 | Gene–environment interaction (G×E), EWAS methylation, bidirectional / mediation MR, cell-type annotation |
 
 Entry points, required calibers and common pitfalls for each method are in [`SKILL.md`](SKILL.md).
 

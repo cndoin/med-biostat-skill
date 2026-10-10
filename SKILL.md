@@ -313,6 +313,15 @@ dhp / ptgds / lpdc 三个真实项目共用同一条链。**这条链可一条�
 | 36 | **批次效应校正 ComBat** | `lib.batch.correct` / `correct_reference` / `diagnose` | EB 收缩（位置+尺度），**非**简单中心化；输入须 log 域；批次与分组共线时禁用；`diagnose` 的 separation ratio 下降**不等于**生物学保留 |
 | 37 | **细胞通讯（配受体）** | `lib.cellcomm.score` / `summary` / `pathway_summary` | p 值是**置换细胞标签**的经验 p（最小 = 1/n_perm）；互作有**方向性**（ligand→receptor 不可对调）；须用归一化表达；`EXAMPLE_LR_PAIRS` 仅演示，生产自供官方表 |
 
+### 六、扩展方法（4 个）
+
+| # | 分析法 | 入口 | 关键口径 |
+|---|---|---|---|
+| 38 | **G×E 基因-环境交互** | `lib.gxe.interaction_test` / `stratified_effect` / `johnson_neyman` / `reri_additive_interaction` | **交互 ≠ 分层**（两层都显著也不代表有交互）；**相乘交互 ≠ 相加交互**（RERI 是另一个量）；连续变量做交互前**必须中心化**，否则主效应变成「另一变量 = 0 时的效应」 |
+| 39 | **EWAS 甲基化差异** | `lib.epigen.diff_methylation` / `dmp_summary` | 回归建在 **M 值**上、报告在 **beta 尺度**（beta 两端方差不齐）；Δβ 与 FDR **双阈值**（大样本下 Δβ=0.01 也会「显著」）；**细胞组成是头号混杂** |
+| 40 | **双向 / 两步法中介 MR** | `lib.mr_full.bidirectional` / `two_step_mediation` | 反向 MR 必须用**结局的独立 IV**（拿同一批 IV 反着算等于没算）；**双向都显著 ≠ 反向因果**（可能是水平多效性）；间接效应 CI 必须 delta 法或 bootstrap |
+| 41 | **细胞类型注释** | `lib.singlecell.annotate_cells` | marker **一个都没匹配上即报错**（基因命名不一致会让打分静默变 0）；注释是**假设**不是结论，结果带 `ratio_to_runner_up` 与 `ambiguous`；打分先 z-score 再平均 |
+
 ### 开源来源速查（谁提供了算法）
 
 | 分析法组 | 上游开源项目 | 许可 | 内嵌位置 |

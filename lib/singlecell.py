@@ -159,3 +159,91 @@ def embedding(log_expr, method: str = "pca", n_comps: int = 30,
         return {"embedding": t["embedding"], "method": "tsne",
                 "kl_divergence": t["kl_divergence"], "rule": t["rule"]}
     raise ValueError(f"method 必须是 pca 或 tsne（UMAP 未内嵌），收到 {method!r}")
+
+
+# ── 细胞类型注释 ──────────────────────────────────────────────────────────────
+def annotate_cells(log_expr, clusters, marker_sets, min_score: float = 0.0,
+                   ambiguity_ratio: float = 0.8):
+    """基于 marker 基因集的 cluster 级细胞类型注释。
+
+    :param log_expr: (细胞 × 基因) 的**已归一化 log 表达** DataFrame
+    :param clusters: 长度 = 细胞数的 cluster 标签
+    :param marker_sets: ``{细胞类型: [基因名, ...]}``
+    :param min_score: 最高分低于此值判为 ``Unassigned``
+    :param ambiguity_ratio: ``最高分/次高分`` 低于此值则标记为「不确定」
+    :return: dict
+        - ``scores``: DataFrame（cluster × 细胞类型），cluster 内 marker 的 z-score 均值
+        - ``annotation``: ``{cluster: {type, confidence, ratio_to_runner_up, ambiguous, ...}}``
+        - ``unmatched_markers``: 各 marker set 中**不在表达矩阵里**的基因
+        - ``matched_markers``: 各 marker set 实际匹配到的个数
+        - ``rule`` / ``engine``
+
+    **红线（三条都踩过）**
+    1. **marker 一个都没匹配上时必须报错**，不能静默返回 0 分——那会让所有 cluster
+       都被注释成同一个类型，而且看起来还挺像回事。
+       最常见的真实原因是基因命名不一致（符号 vs Ensembl ID）。
+    2. **注释是假设不是结论**。本函数额外给出「最高分 / 次高分」作为不确定性提示，
+       分不开时明确标 ``ambiguous``，而不是硬给一个类型。
+    3. **打分必须先跨基因标准化（z-score）再平均**。直接平均原始表达会被高表达
+       基因完全主导——不同基因的表达量级能差几个数量级。
+    """
+    import pandas as pd
+
+    if not hasattr(log_expr, "columns"):
+        raise ValueError("log_expr 必须是 DataFrame（列名 = 基因名）")
+    genes = [str(g) for g in log_expr.columns]
+    gset = set(genes)
+    labels = pd.Series([str(c) for c in clusters], index=log_expr.index)
+    if len(labels) != log_expr.shape[0]:
+        raise ValueError(f"clusters 长度 {len(labels)} != 细胞数 {log_expr.shape[0]}")
+
+    matched, unmatched = {}, {}
+    for ct, mk in marker_sets.items():
+        hit = [str(m) for m in mk if str(m) in gset]
+        unmatched[str(ct)] = [str(m) for m in mk if str(m) not in gset]
+        if not hit:
+            raise ValueError(
+                f"细胞类型 {ct!r} 的 marker 一个都没匹配上表达矩阵"
+                f"（示例 {list(mk)[:3]}）——请检查基因命名（符号 vs Ensembl ID）")
+        matched[str(ct)] = hit
+
+    X = log_expr.to_numpy(dtype=float)
+    sd = X.std(axis=0)
+    z = (X - X.mean(axis=0)) / np.where(sd > 0, sd, 1.0)
+    zdf = pd.DataFrame(z, index=log_expr.index, columns=genes)
+
+    rows = {}
+    for cl in pd.unique(labels):
+        m = (labels == cl).to_numpy()
+        rows[str(cl)] = {ct: float(zdf.loc[m, hit].to_numpy().mean())
+                         for ct, hit in matched.items()}
+    scores = pd.DataFrame(rows).T          # (cluster × 细胞类型)
+
+    annotation = {}
+    for cl, row in scores.iterrows():
+        ordered = row.sort_values(ascending=False)
+        top = float(ordered.iloc[0])
+        second = float(ordered.iloc[1]) if len(ordered) > 1 else float("-inf")
+        if top < min_score:
+            annotation[cl] = {"type": "Unassigned", "confidence": top,
+                              "ambiguous": True, "note": "最高分低于 min_score"}
+            continue
+        ratio = (top / second) if second > 0 else float("inf")
+        annotation[cl] = {
+            "type": str(ordered.index[0]),
+            "confidence": top,
+            "runner_up": str(ordered.index[1]) if len(ordered) > 1 else None,
+            "ratio_to_runner_up": ratio,
+            "ambiguous": bool(ratio < ambiguity_ratio),
+            "n_markers": len(matched[str(ordered.index[0])]),
+        }
+
+    return {
+        "scores": scores,
+        "annotation": annotation,
+        "unmatched_markers": {k: v for k, v in unmatched.items() if v},
+        "matched_markers": {k: len(v) for k, v in matched.items()},
+        "rule": ("cluster 内 marker 基因 z-score 均值最高者为注释类型；"
+                 "ratio_to_runner_up < ambiguity_ratio 时标为不确定"),
+        "engine": "lib.singlecell.annotate_cells",
+    }
