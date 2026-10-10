@@ -25,8 +25,9 @@ logs/*
 !logs/.gitkeep
 *.log
 _caps.json
-_runall.json
-_runall.err
+_run*.json
+_run*.err
+_caps*.json
 *.tmp
 
 # 编辑器 / 系统
