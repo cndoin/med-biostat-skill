@@ -1,0 +1,28 @@
+# 报告契约 · 研究报告 / 立项报告（research_report）
+# 用途：工作流 A（方向裁定）与阶段性汇报。
+id: research_report
+version: "1.0.0"
+required_sections:
+  - id: question
+    title: 研究问题
+    must_contain: [可检验假设, 暴露, 结局, 目标人群]
+  - id: dedup
+    title: 命题级查重
+    must_contain: [概念路径, 技术路径, 实体路径]
+    rule: "三条路径都要给检索式与命中结果，不能只写「查过了」"
+  - id: data
+    title: 数据可得性
+    table_schema: [数据源, 层级(一/二/三), 版本, 可达性, 授权]
+  - id: design
+    title: 研究设计
+    must_contain: [主分析, 敏感性, 阳性对照, 阴性对照]
+  - id: gates
+    title: 预设判定门
+    table_schema: [门编号, 判定条件, 阈值, 数据来源]
+    rule: "判定门必须动手前写好，且可检验（有阈值、有数据来源）"
+  - id: risk
+    title: 风险与局限
+    must_contain: [组织错配, 群体分层, 样本重叠]
+constraints:
+  gates_predefined: true
+  forbid_post_hoc_threshold: true

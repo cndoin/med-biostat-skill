@@ -1,0 +1,29 @@
+# 报告契约 · 数据审计报告（audit_report）
+# 用途：工作流 C（用户拿已有一份结果来核对）的产出结构。
+id: audit_report
+version: "1.0.0"
+required_sections:
+  - id: scope
+    title: 审计范围与对象
+    must_contain: [被审产物清单, 版本, 哈希]
+  - id: method
+    title: 审计方法
+    must_contain: [复算口径, 脚本清单, 判定阈值]
+  - id: recompute
+    title: 复算结果对照
+    table_schema: [指标, 原文值, 复算值, 偏差, 口径是否一致, 结论]
+  - id: confounder
+    title: 混杂十二项逐条
+    table_schema: [编号, 混杂项, 已查/无法查, 依据, 结论]
+    rule: "无法查的必须写「无法查」，不能写「未见异常」"
+  - id: gates
+    title: 判定门命中情况
+    table_schema: [门编号, 判定, 依据数据, 处置]
+  - id: errata
+    title: 勘误表
+    table_schema: [位置, 原文, 应有值, 依据, 严重度]
+  - id: conclusion
+    title: 审计结论
+constraints:
+  every_claim_needs_source: true
+  forbid_unsupported_reassurance: true   # 禁止「应该没问题」类表述

@@ -1,0 +1,39 @@
+{
+  "study": "PTGDS_cataract_demo",
+  "_comment": "声明式配置：所有参数在此写清，管道据此确定性执行。路径可为绝对或相对 CWD。",
+  "steps": {
+    "cis_instrument": {
+      "eqtl": "tests/.fixtures_mr/eqtl.tsv",
+      "genes": "tests/.fixtures_mr/genes.tsv",
+      "window_kb": 100,
+      "p_threshold": 5e-8,
+      "f_min": 10
+    },
+    "wald_mr": {
+      "instruments": "tests/.fixtures_mr/mr_input.tsv",
+      "f_min": 10
+    },
+    "abf_coloc": [
+      {
+        "trait1": "tests/.fixtures_mr/trait1_region.tsv",
+        "trait2": "tests/.fixtures_mr/trait2_region.tsv",
+        "p12_list": "1e-6,5e-6,1e-5",
+        "sdy_list": "0.5,1,1.5"
+      },
+      {
+        "trait1": "tests/.fixtures_mr/trait1_region.tsv",
+        "trait2": "tests/.fixtures_mr/trait2_null.tsv",
+        "p12": 1e-5
+      }
+    ],
+    "testing_family": {
+      "input": "tests/.fixtures_mr/tests.tsv",
+      "alpha": 0.05
+    },
+    "replication_check": {
+      "discovery": "tests/.fixtures_mr/disc.tsv",
+      "replication": "tests/.fixtures_mr/rep.tsv",
+      "alpha": 0.05
+    }
+  }
+}

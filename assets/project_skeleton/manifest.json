@@ -1,0 +1,27 @@
+{
+  "name": "biostat-project-skeleton",
+  "version": "1.0.0",
+  "description": "生信项目的固定目录契约（S7）。任何分析项目按此建目录，脚本按此定位产物。",
+  "dirs": {
+    "scripts": "分析脚本（确定性、可重跑）",
+    "tables": "中间表与结果表（TSV/CSV，带表头与口径列）",
+    "report": "报告正文（Markdown，禁用写作代理改写含数字的段落）",
+    "figures": "图（矢量优先：SVG/PDF；位图仅用于必要场景）",
+    "web": "交互式 HTML 产出",
+    "logs": "结构化日志与判定记录（*.json）",
+    "raw": "原始取回数据（只读，不入版本库，以哈希标识）",
+    "curated": "清洗/统一口径后的数据（Parquet 优先）",
+    "output": "最终交付物（DOCX / PDF / 打包）"
+  },
+  "required_logs": [
+    "00_intake.json",
+    "provenance.json",
+    "gates.json",
+    "confounder_audit.json"
+  ],
+  "rules": [
+    "raw/ 一旦落盘不得原地修改，只能新增版本目录",
+    "任何产物文件名不得含 'final' / 'new' / '最新' 等无版本语义的词",
+    "logs/ 下的 JSON 必须可被 jq / python -m json.tool 直接解析"
+  ]
+}
