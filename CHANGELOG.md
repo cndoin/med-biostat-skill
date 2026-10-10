@@ -3,6 +3,19 @@
 本项目的所有重要变更都记录在此。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+
+- **眼科 · 经典 IOL 度数计算**（白内障术前最核心的一步）：`lib/ophtha.py` 新增
+  **SRK/T**、**Hoffer Q**、**Holladay 1**、**Haigis** 四个第三代薄透镜公式 ——
+  由眼轴 + 角膜曲率（+ 前房深度）算 IOL 度数，并做**多公式横向比较**。
+  另含 A 常数 ⇄ ACD 常数换算、Haigis 的 d 反解（IOL 常数优化用）。
+  按**公开发表论文独立实现**——可搜到的实现许可全部不合格（AGPL-3.0 或无 LICENSE），
+  详见 [`vendor/ATTRIBUTION.md`](vendor/ATTRIBUTION.md) 的「按公开文献独立实现」一节。
+  ⚠️ 验证到"正反算闭合 / 眼轴单调 / 四公式极差符合文献 / Haigis 对上公开算例"；
+  **未**与厂商在线计算器逐例对拍，**临床决策前须用机构计算器复核**。
+
 ## [1.7.0] — 2026-10-11
 
 首个公开版本。

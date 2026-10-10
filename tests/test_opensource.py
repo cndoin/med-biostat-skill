@@ -257,6 +257,72 @@ class TestOphthalmologyCataract(unittest.TestCase):
         self.assertIn("RAISED", self._runl(code))
 
 
+    def test_iol_formula_haigis_public_worked_example(self):
+        """定向：Haigis 的 d 反解必须对上公开算例（IOL Solver 公布 5.4615 mm）。"""
+        out = self._runl(
+            "from lib import ophtha as O\n"
+            "print('%.4f' % O.haigis_solve_d(24.0, 7.5, 21.0, -2.0))\n")
+        d = float(out.strip().splitlines()[-1])
+        self.assertAlmostEqual(d, 5.4615, delta=0.001,
+                               msg=f"Haigis d 反解与公开算例不符：{d}")
+
+    def test_iol_formulas_roundtrip_and_monotonic(self):
+        """正算→反算必须闭合；度数必须随眼轴单调（短眼更高）。"""
+        out = self._runl(
+            "from lib import ophtha as O\n"
+            "la, r = 23.5, O.r_from_K(43.0)\n"
+            "A, pACD, SF = 119.0, 5.0, 1.5\n"
+            "a0, a1, a2, acd = 1.0, 0.4, 0.1, 3.0\n"
+            "p1 = O.srkt_power(la, r, A)\n"
+            "p2 = O.hofferq_power(la, r, pACD)\n"
+            "p3 = O.holladay1_power(la, r, SF)\n"
+            "p4 = O.haigis_power(la, r, acd, a0, a1, a2)\n"
+            "rt = max(abs(O.srkt_refraction(la, r, A, p1)),\n"
+            "         abs(O.hofferq_refraction(la, r, pACD, p2)),\n"
+            "         abs(O.holladay1_refraction(la, r, SF, p3)),\n"
+            "         abs(O.haigis_refraction(la, r, acd, a0, a1, a2, p4)))\n"
+            "print('RT', rt)\n"
+            "print('P1', p1)\n"
+            "print('SHORT', O.srkt_power(20.0, r, A))\n"
+            "print('LONG', O.srkt_power(28.0, r, A))\n")
+        val = {}
+        for line in out.splitlines():
+            k, _, v = line.partition(" ")
+            if k in ("RT", "P1", "SHORT", "LONG"):
+                val[k] = float(v)
+        self.assertEqual(len(val), 4, f"输出解析不完整：{out!r}")
+        self.assertLess(val["RT"], 1e-6, f"正算→反算往返不闭合：{val['RT']:.2e}")
+        self.assertGreater(val["SHORT"], val["LONG"], "短眼轴的 IOL 度数必须更高")
+        self.assertTrue(18.0 < val["P1"] < 25.0,
+                        f"典型眼度数应落在临床合理区，实测 {val['P1']:.2f} D")
+
+    def test_iol_formula_spread_matches_literature(self):
+        """四公式在典型眼上的极差应落在文献报告范围内（<1.5 D）。"""
+        out = self._runl(
+            "from lib import ophtha as O\n"
+            "r = O.r_from_K(43.0)\n"
+            "c = O.iol_power_comparison(23.5, r, a_const=119.0, pacd=5.0, sf=1.5,\n"
+            "                           haigis_abc=(1.0, 0.4, 0.1), acd_mm=3.0)\n"
+            "print('N', len(c['values']))\n"
+            "print('SPREAD', c['spread_d'])\n")
+        n = int([l for l in out.splitlines() if l.startswith("N ")][0].split()[-1])
+        spread = float([l for l in out.splitlines()
+                        if l.startswith("SPREAD")][0].split()[-1])
+        self.assertEqual(n, 4, "四个公式都应算出结果")
+        self.assertLess(spread, 1.5, f"公式间极差过大：{spread:.3f} D")
+
+    def test_iol_formula_rejects_unphysical_input(self):
+        """负向：不物理的输入必须报错，而不是给出一个像模像样的号码。"""
+        out = self._runl(
+            "from lib import ophtha as O\n"
+            "try:\n"
+            "    O.hofferq_power(23.5, 0.001, 5.0)\n"
+            "    print('RAISED False')\n"
+            "except Exception:\n"
+            "    print('RAISED True')\n")
+        self.assertIn("RAISED True", out)
+
+
 class TestDataPrep(unittest.TestCase):
     """只需 numpy。"""
 

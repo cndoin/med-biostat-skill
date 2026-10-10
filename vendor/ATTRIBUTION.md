@@ -61,6 +61,33 @@ numba / pyvis 等依赖，整文件内嵌会带进一堆不可用依赖，故按
 | 批次校正 | `combat_reference`（参考批次模式）与 `batch_diagnostics` 为新增，非上游 scanpy 代码 | ref-batch 结果与 scanpy 全均值收缩口径不同；诊断是效应量描述非检验 |
 | 细胞通讯 | **无 complex（多亚基）展开**；置换为单进程向量化 | 需 complex 时请传入已展开的 pair 表；p 值分布一致，仅速度不同 |
 
+## 按公开文献独立实现（**不是**内嵌开源件）
+
+以下能力**没有可内嵌的开源实现**（候选许可全部不合格），因此按**公开发表的论文**
+独立编写。这一节的意义：将来不会有人误以为它们是"抄来的"，也不会误以为
+"没写来源 = 原创"。
+
+| 能力 | 位置 | 公式来源（原始论文） | 为什么不能内嵌 | 验证级别 |
+|---|---|---|---|---|
+| SRK/T | `lib/ophtha.py::srkt_power` / `srkt_refraction` | Retzlaff JA, Sanders DR, Kraff MC. *J Cataract Refract Surg* 1990;16(3):333-40（勘误 16(4):528） | `goldengrape/Python-for-ophthalmologist`、`GiusepeG/iol-calc`、`junedanube/IOL_Calculator_AI` 均**无 LICENSE** | 正反算闭合 / 度数随眼轴单调 / 与同类公式极差符合文献 |
+| Hoffer Q | `hofferq_power` / `hofferq_refraction` | Hoffer KJ. *J Cataract Refract Surg* 1993;19(6):700-12（勘误 JCRS 2007;33(1):2） | 同上 | 同上 |
+| Holladay 1 | `holladay1_power` / `holladay1_refraction` | Holladay JT, Musgrove KH, Prager TC, et al. *J Cataract Refract Surg* 1988;14(1):17-24 | `enbrown/iol-calculations` 是 **AGPL-3.0**（传染性最强） | 同上 |
+| Haigis | `haigis_power` / `haigis_refraction` / `haigis_solve_d` | Haigis W, Lege B, Miller N, Schneider B. *Graefes Arch Clin Exp Ophthalmol* 2000;238(9):765-73 | 同上 | 另**对上一个公开算例**：`solve_d(24, 7.5, 21, −2) = 5.4615 mm` ✅ |
+
+**常数与函数结构的核对来源**（公开技术说明，非代码复制）：
+Debellemanière G, et al. "The (not so) secret mechanisms behind classical thin lens IOL
+formulas". IOL Solver, 2022-10-23；"How to easily perform the Haigis triple
+optimization". IOL Solver；Haigis W. "The Haigis formula". In: Shammas HJ (ed).
+*Intraocular Lens Power Calculation*. Slack Inc; 2004.
+
+⚠️ **未验证的部分（如实标注）**：未与 ASCRS / Barrett 等厂商在线计算器**逐例对拍**
+（那需要各厂商的常数）。因此这组函数适用于**科研统计**（反推公式表现、常数优化）；
+**用于临床决策前必须用你所在机构的计算器复核**。
+
+**查证记录（2026-10-11）**：GitHub 仓库搜索 + 代码搜索共得 7 个 Python/R 候选，
+许可分布为 AGPL-3.0 ×1、无 LICENSE ×4、NOASSERTION ×1、MIT ×1
+（`gmeyeltd/biometry-stats`，但它只做生物测量统计，不含这四个公式）。
+
 ## 评估后未内嵌（去重决策记录）
 
 同一能力只保留一份实现（设计文档附录 B 陷阱 P21：同一逻辑多处实现 → 结论不一致）。

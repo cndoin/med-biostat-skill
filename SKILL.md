@@ -302,7 +302,7 @@ dhp / ptgds / lpdc 三个真实项目共用同一条链。**这条链可一条�
 | # | 分析法 | 入口 | 关键口径 |
 |---|---|---|---|
 | 32 | 数据清洗与变量挑选 | `lib.prep.prep_pipeline` | **VIF 在相关剪枝前算**；离群三口径默认 k 不同（iqr1.5/z3.0/mad3.5） |
-| 33 | **IOL 屈光计算** | `lib.ophtha.tilp_from_refraction` | 源 PEARL-DGS（MIT）；SE⇄TILP 互逆，往返误差<1e-9 D |
+| 33 | **IOL 度数计算 + 屈光位置** | `lib.ophtha.iol_power_comparison`（术前算度数：SRK/T · Hoffer Q · Holladay 1 · Haigis）/ `tilp_from_refraction`（术后光学位置，源 PEARL-DGS, MIT） | 四公式**各用各的常数、不可互换**，角膜指数也不同（1.3375 / 1.3375 / 4÷3 / 1.3315）；度数公式为**独立实现**（无可内嵌的干净实现），未对拍厂商计算器，临床决策前须复核 |
 | 34 | 视力与屈光结局 | `lib.ophtha.logmar_from_snellen` / `refractive_outcome` | 6/12=0.3010；PE = actual − predicted；±0.5D 内比例是 JCRS 标准项 |
 | 35 | 晶状体基因集富集 | `lib.ophtha.lens_gene_overlap` + `lib.pathway.ora` | **交集个数 ≠ 富集**，必须做超几何检验 |
 
@@ -343,6 +343,22 @@ scanpy 曾被误记为 GPL）。
 
 ```python
 from lib import ophtha as O
+
+# ⓪ 术前 IOL 度数计算 —— 四个经典薄透镜公式横向比较（白内障最核心的那步）
+r = O.r_from_K(43.0)                                   # K=43.0 D → 7.85 mm
+O.iol_power_comparison(23.5, r, a_const=119.0, pacd=5.0, sf=1.5,
+                       haigis_abc=(1.0, 0.4, 0.1), acd_mm=3.0)
+#   典型眼 → SRK/T 21.83 · Hoffer Q 20.83 · Holladay 1 21.30 · Haigis 21.17 D
+#   单公式入口：O.srkt_power / hofferq_power / holladay1_power / haigis_power
+#   正算（度数→术后屈光）：同名 *_refraction
+#   常数换算：O.acd_const_from_a_constant(119.0) → 5.5887
+#   Haigis 常数优化：O.haigis_solve_d(24, 7.5, 21, -2) → 5.4615 mm
+#
+# ⚠️ 这四个公式是**按公开论文独立实现**的，不是内嵌开源件 —— 能搜到的 Python/R
+#    实现要么是 AGPL-3.0，要么没有 LICENSE，**没有一个许可干净到可以内嵌**。
+#    已验证：正反算闭合 / 度数随眼轴单调 / 四公式极差 0.995 D（符合文献）/
+#    Haigis 对上一个公开算例。**未**与厂商在线计算器逐例对拍（那需要厂商常数）。
+#    → 科研统计（反推公式表现、常数优化）可用；**临床决策前请用机构计算器复核**。
 
 # ① IOL 光学：术后等效球镜 ⇄ IOL 理论位置（TILP）。两者互逆，往返误差 < 1e-9 D
 tilp = O.tilp_from_refraction(se=-1.0, al_mm=23.5, rco1_mm=7.8, rco2_mm=6.5)   # -> mm

@@ -1,0 +1,1 @@
+[FAIL] 输出含非有限浮点（NaN/Inf），已置为 null: Out of range float values are not JSON compliant: nan
