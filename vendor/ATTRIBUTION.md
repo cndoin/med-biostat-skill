@@ -40,6 +40,8 @@ numba / pyvis 等依赖，整文件内嵌会带进一堆不可用依赖，故按
 | `vendor/_sc/core.py` | scverse/scanpy · `src/scanpy/**` | **BSD-3-Clause** | 取 QC/归一化/HVG/PCA/邻居/rank_genes_groups/score_genes 的算法；输入输出改为 numpy，去掉 anndata/sklearn/dask 绑定 |
 | `vendor/_batch/core.py` | scverse/scanpy · `src/scanpy/preprocessing/_combat.py` | **BSD-3-Clause** | 取 ComBat（Johnson 2007）全套：设计矩阵/池化方差标准化/L-S 模型/逆 Gamma 先验/迭代条件后验；patsy→pandas one-hot、numba→纯 numpy、去 AnnData，改 (样本×特征) 接口 |
 | `vendor/_cellcomm/core.py` | ventolab/CellphoneDB · `src/core/methods/cpdb_statistical_analysis_helper.py` | **MIT** | 取 `mean_analysis`/`percent_analysis`/置换 p 值口径；去数据库+complex 绑定与多进程，改「用户传配受体表」的 numpy/pandas 接口 |
+| `vendor/_scrublet/core.py` | swolock/scrublet · `src/scrublet/*.py`；自动阈值取自 scikit-image · `skimage/filters/thresholding.py` | **MIT** / BSD-3-Clause | 取 `tot_counts_norm`/`runningquantile`/`get_vscores`/`filter_genes`/`simulate_doublets`/`_nearest_neighbor_classifier`/`call_doublets` 与 `threshold_minimum`；`sklearn PCA`→numpy SVD、`sklearn NearestNeighbors`/`annoy`→scipy cKDTree、去 numba/matplotlib、sparse→dense |
+| `vendor/_gam/core.py` | dswah/pyGAM · `pygam/{utils,penalties,pygam}.py` | **Apache-2.0** | 取 `gen_edge_knots`/`b_spline_basis`/`derivative`/`_pirls`(QR+SVD)/`_estimate_model_statistics`(edof·scale)/`_estimate_GCV_UBRE`；**只保留高斯族+identity+单变量样条**这条路径，去 progressbar2/sksparse 可选依赖，sparse→dense |
 
 ### ⚠️ 一处**已更正的错误记录**（2026-10-11）
 

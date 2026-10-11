@@ -83,6 +83,9 @@ TIER1 = {
     # —— v1.7 后续：扩展方法（公开标准方法，非自造）——
     "lib.gxe": "G×E 交互：交互项检验 / 分层效应 / Johnson-Neyman 区间 / 相加交互 RERI·AP·S",
     "lib.epigen": "EWAS 甲基化：beta⇄M 转换 / limma 式 moderated t 差异甲基化 / DMP 汇总 / 细胞组成代理",
+    # —— v1.8：跨龄单细胞方向补齐（S0 判决性预检的三件地基）——
+    "lib.age_onset": "**年龄失守点（唯一裁决点）**：GAM 拟合表达~年龄 + 置信带越界 / 相对降幅两种口径 + 批量筛查（源：pyGAM，Apache-2.0）",
+    "lib.scrublet": "双胞体检测：模拟双胞体 + kNN 贝叶斯打分 + 自动阈值，支持按供体分批（源：swolock/scrublet，MIT）",
 }
 # 每个分析法模块的**可导入性**逐项探测（不靠 tier1_ready 一刀切：
 # 某个模块缺依赖时，其余模块必须照常报可用，否则会误报「功能缺失」）
@@ -90,7 +93,7 @@ LIB_MODULES = [
     "increment", "competing", "mixed", "impute", "mr_full", "ophtha", "prep",
     "network", "singlecell", "pathway", "immune", "regularized", "meta",
     "causal", "prs", "finemap", "mutational", "spatial", "trajectory", "power",
-    "batch", "cellcomm", "gxe", "epigen",
+    "batch", "cellcomm", "gxe", "epigen", "age_onset", "scrublet",
 ]
 ZERO_DEP_IN_VENDOR = {
     "registry": "函数注册表（中英文检索 + 前置校验，纯标准库）",

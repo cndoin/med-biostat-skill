@@ -1,8 +1,8 @@
 ---
 name: biostat-copilot
-description: 生信 / 医学研究全流程编排与审计（口径先于数值 · 一致性强于看起来对 · 混杂是主战场 · **数字一律由程序算出，不由 AI 推断**）。**何时自动加载**：用户要动手做、复核或投稿一项医学/生信分析时——如「这个方向能不能做、有没有人做过」「帮我分析这份 GWAS/组学/队列数据」「核对一下我这组结果对不对」「这个药/基因有没有因果证据」「把它写成可投稿的报告」。**覆盖七类形态**：(1) 药物靶点与因果推断——药物靶点 MR、孟德尔随机化（IVW/加权中位数/Egger/众数/RAPS/污染混合 + 异质性、留一、Steiger、Radial）、cis-eQTL/pQTL 工具变量、Wald ratio、共定位 coloc/PP.H4、药物重定位；(2) 遗传关联——GWAS 汇总统计处理与质控、λGC、独立位点与可信集、精细定位、区间基因注释；(3) 组学整合——eQTL/pQTL/TWAS/PWAS、组织与细胞类型富集、单细胞归属；(4) 临床统计——基线表、生存分析、预测模型（区分度+校准度+决策曲线）、C-index/NRI/IDI、竞争风险、混合效应；(5) 差异与通路——差异表达、共表达网络（WGCNA）、富集（ORA/GSEA/GSVA/ssGSEA）、单细胞、批次校正 ComBat、细胞通讯配受体、免疫浸润、空间转录组、拟时序、突变特征；(6) **眼科与白内障（重点方向）**——白内障 GWAS/遗传易感位点、晶状体蛋白基因集（crystallin/MIP/GJA8/EPHA2 等）富集、**人工晶体 IOL 屈光计算（PEARL-DGS 厚透镜 TILP/等效球镜）**、logMAR·Snellen 视力换算、屈光预测误差（ME/MAE/MedAE/±0.5D 内比例）、眼压统计、角膜曲率与眼轴；(7) 数据交付与审计——数据清洗与变量挑选（缺失/离群/共线性 VIF）、数据源分级、**与官方发布的一致性核验（哈希/字节数/逐变异互证）**、混杂十二项审计、外部复现、报告规范对表（STROBE/STROBE-MR/TRIPOD+AI/PRISMA）。**触发词**：生信分析、GWAS、孟德尔随机化、MR、共定位、coloc、eQTL、pQTL、TWAS、富集分析、精细定位、位点、差异表达、WGCNA、共表达网络、生存分析、预测模型、单细胞、聚类、分群、批次效应、批次校正、ComBat、细胞通讯、配受体、免疫浸润、去卷积、空间转录组、拟时序、突变特征、TMB、蛋白组、PTM、药物靶点、倾向性评分、PSM、IPTW、因果推断、Meta 分析、荟萃分析、LASSO、岭回归、变量筛选、样本量、功效、PRS、多基因风险评分、**白内障、眼科、晶状体、人工晶体、IOL、屈光、眼轴、角膜、视力、logMAR、眼压、青光眼、ophthalmology、cataract、intraocular lens、refractive**、数据清洗、bioinformatics、colocalization、fine-mapping、Mendelian randomization、drug target、single-cell、single cell clustering、pseudotime、batch effect、ComBat、cell-cell communication、CellPhoneDB。**不触发**：单纯查文献、单纯问概念、单纯要一张图、与医学/生信无关的任务。This skill should be used when a user plans, executes, audits, or writes up a bioinformatics or medical research analysis end-to-end.
+description: 生信 / 医学研究全流程编排与审计（口径先于数值 · 一致性强于看起来对 · 混杂是主战场 · **数字一律由程序算出，不由 AI 推断**）。**何时自动加载**：用户要动手做、复核或投稿一项医学/生信分析时——如「这个方向能不能做、有没有人做过」「帮我分析这份 GWAS/组学/队列数据」「核对一下我这组结果对不对」「这个药/基因有没有因果证据」「把它写成可投稿的报告」。**覆盖七类形态**：(1) 药物靶点与因果推断——药物靶点 MR、孟德尔随机化（IVW/加权中位数/Egger/众数/RAPS/污染混合 + 异质性、留一、Steiger、Radial）、cis-eQTL/pQTL 工具变量、Wald ratio、共定位 coloc/PP.H4、药物重定位；(2) 遗传关联——GWAS 汇总统计处理与质控、λGC、独立位点与可信集、精细定位、区间基因注释；(3) 组学整合——eQTL/pQTL/TWAS/PWAS、组织与细胞类型富集、单细胞归属；(4) 临床统计——基线表、生存分析、预测模型（区分度+校准度+决策曲线）、C-index/NRI/IDI、竞争风险、混合效应；(5) 差异与通路——差异表达、共表达网络（WGCNA）、富集（ORA/GSEA/GSVA/ssGSEA）、单细胞、**双胞体检测**、批次校正 ComBat、细胞通讯配受体、免疫浸润、空间转录组、拟时序、**跨龄单细胞与年龄失守点**、突变特征；(6) **眼科与白内障（重点方向）**——白内障 GWAS/遗传易感位点、晶状体蛋白基因集（crystallin/MIP/GJA8/EPHA2 等）富集、**人工晶体 IOL 屈光计算（PEARL-DGS 厚透镜 TILP/等效球镜）**、logMAR·Snellen 视力换算、屈光预测误差（ME/MAE/MedAE/±0.5D 内比例）、眼压统计、角膜曲率与眼轴；(7) 数据交付与审计——数据清洗与变量挑选（缺失/离群/共线性 VIF）、数据源分级、**与官方发布的一致性核验（哈希/字节数/逐变异互证）**、混杂十二项审计、外部复现、报告规范对表（STROBE/STROBE-MR/TRIPOD+AI/PRISMA）。**触发词**：生信分析、GWAS、孟德尔随机化、MR、共定位、coloc、eQTL、pQTL、TWAS、富集分析、精细定位、位点、差异表达、WGCNA、共表达网络、生存分析、预测模型、单细胞、聚类、分群、双胞体、doublet、去双胞体、跨龄、跨年龄、年龄轨迹、失守点、年龄失守、衰老轨迹、批次效应、批次校正、ComBat、细胞通讯、配受体、免疫浸润、去卷积、空间转录组、拟时序、突变特征、TMB、蛋白组、PTM、药物靶点、倾向性评分、PSM、IPTW、因果推断、Meta 分析、荟萃分析、LASSO、岭回归、变量筛选、样本量、功效、PRS、多基因风险评分、**白内障、眼科、晶状体、人工晶体、IOL、屈光、眼轴、角膜、视力、logMAR、眼压、青光眼、ophthalmology、cataract、intraocular lens、refractive**、数据清洗、bioinformatics、colocalization、fine-mapping、Mendelian randomization、drug target、single-cell、single cell clustering、pseudotime、doublet detection、age onset、batch effect、ComBat、cell-cell communication、CellPhoneDB。**不触发**：单纯查文献、单纯问概念、单纯要一张图、与医学/生信无关的任务。This skill should be used when a user plans, executes, audits, or writes up a bioinformatics or medical research analysis end-to-end.
 license: MIT
-version: 1.7.0
+version: 1.8.0
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, WebFetch, WebSearch
 agent_created: true
 metadata:
@@ -248,7 +248,7 @@ dhp / ptgds / lpdc 三个真实项目共用同一条链。**这条链可一条�
 
 ## 分析法总表（AI 调用的第一站：先查这张表，再动手）
 
-**35 个分析法 · 全部由程序确定性计算，AI 只负责选方法与读结果，不产生任何数值。**
+**43 个分析法 · 全部由程序确定性计算，AI 只负责选方法与读结果，不产生任何数值。**
 用户问「用什么方法分析」或「帮我做 X 分析」时，**先在这张表里定位**，再跳到对应模块。
 
 ### 一、因果与遗传（10 个）
@@ -322,6 +322,13 @@ dhp / ptgds / lpdc 三个真实项目共用同一条链。**这条链可一条�
 | 40 | **双向 / 两步法中介 MR** | `lib.mr_full.bidirectional` / `two_step_mediation` | 反向 MR 必须用**结局的独立 IV**（拿同一批 IV 反着算等于没算）；**双向都显著 ≠ 反向因果**（可能是水平多效性）；间接效应 CI 必须 delta 法或 bootstrap |
 | 41 | **细胞类型注释** | `lib.singlecell.annotate_cells` | marker **一个都没匹配上即报错**（基因命名不一致会让打分静默变 0）；注释是**假设**不是结论，结果带 `ratio_to_runner_up` 与 `ambiguous`；打分先 z-score 再平均 |
 
+### 七、单细胞质控与衰老轨迹（2 个）
+
+| # | 分析法 | 入口 | 关键口径 |
+|---|---|---|---|
+| 42 | **双胞体检测（Scrublet）** | `lib.scrublet.detect_doublets` | **双胞体在轨迹推断里会伪装成「过渡态细胞」**，不清掉直接污染伪时间与失守曲线；须传**原始 counts**（归一化破坏「计数相加=双胞体」前提）；基因过滤后剩太少必须**报错**（否则 PCA 建在噪声上，分数看着正常却无判别力）；自动阈值是 advisory，**必须目视核对**；按供体分批时每批自含完整细胞类型 |
+| 43 | **年龄失守点（唯一裁决点）** | `lib.age_onset.fit_onset` / `screen_age_effects` | 全项目**只此一处**定义「几岁失守」；两种口径**默认 `ci_departure`**（CI 显著低于基线且此后持续），另一为 `relative_drop`；**趋势不显著一律返回 `onset_age=None`**（报一个年龄等于把噪声当发现）；**这是人口细胞测得的供体年龄，不是细胞年龄**；`pvalue` 为 F 近似 |
+
 ### 开源来源速查（谁提供了算法）
 
 | 分析法组 | 上游开源项目 | 许可 | 内嵌位置 |
@@ -333,10 +340,14 @@ dhp / ptgds / lpdc 三个真实项目共用同一条链。**这条链可一条�
 | 单细胞全流程 | scverse/scanpy | BSD-3-Clause | `vendor/_sc/` + `lib/singlecell.py` |
 | 批次校正 ComBat | scverse/scanpy（`_combat.py`） | BSD-3-Clause | `vendor/_batch/` + `lib/batch.py` |
 | 细胞通讯 | ventolab/CellphoneDB | MIT | `vendor/_cellcomm/` + `lib/cellcomm.py` |
+| 双胞体检测 | swolock/scrublet（+ scikit-image 的 `threshold_minimum`） | MIT / BSD-3-Clause | `vendor/_scrublet/` + `lib/scrublet.py` |
+| 广义可加模型 GAM | dswah/pyGAM | Apache-2.0 | `vendor/_gam/` + `lib/age_onset.py` |
 | 其余（正则化/Meta/因果/PRS/SuSiE/空间/轨迹…） | 自研（口径对齐公开文献，无 GPL 依赖） | 本 skill | `lib/*.py` |
 
 完整许可与「未内嵌」决策记录见 `vendor/ATTRIBUTION.md`（含一处**已更正的错误**：
-scanpy 曾被误记为 GPL）。
+scanpy 曾被误记为 GPL）。**许可不明的项目一律不内嵌**：本轮候选里
+`MarioniLab/miloR` 与 `bulik/ldsc` 均为 GPL-3.0，因此差异丰度检验（Milo）未内嵌，
+如实标注为缺口。
 
 ### 方法选择的三条硬规则
 
