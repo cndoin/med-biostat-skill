@@ -5,7 +5,7 @@
   <img src="assets/brand.svg" alt="biostat-copilot" width="760">
 </picture>
 
-**An evidence-first workflow skill for bioinformatics and medical research — 43 analysis methods that AI agents can actually run.**
+**An evidence-first workflow skill for bioinformatics and medical research — 48 analysis methods that AI agents can actually run.**
 
 [![Version](https://img.shields.io/badge/version-1.9.0-0d9488)](VERSION)
 [![License: MIT](https://img.shields.io/badge/License-MIT-8b5cf6.svg)](LICENSE)
