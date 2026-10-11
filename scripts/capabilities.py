@@ -86,6 +86,13 @@ TIER1 = {
     # —— v1.8：跨龄单细胞方向补齐（S0 判决性预检的三件地基）——
     "lib.age_onset": "**年龄失守点（唯一裁决点）**：GAM 拟合表达~年龄 + 置信带越界 / 相对降幅两种口径 + 批量筛查（源：pyGAM，Apache-2.0）",
     "lib.scrublet": "双胞体检测：模拟双胞体 + kNN 贝叶斯打分 + 自动阈值，支持按供体分批（源：swolock/scrublet，MIT）",
+    # —— v1.9：供体层级与转化出口（细胞类型 × 年龄 × 可成药 研究框架）——
+    "lib.lm": "**moderated t 唯一裁决点**：Smyth 2004 经验贝叶斯方差收缩 + BH 校正，EWAS 与蛋白组共用同一套（保证两侧 p 值可比）",
+    "lib.pseudobulk": "供体层级聚合：先按供体加 raw counts 再归一化（默认）/ log 均值（有偏口径）；防伪重复的第一道闸门",
+    "lib.specificity": "**细胞类型特异性（唯一裁决点）**：log2 份额富集 ES + 归属标注 + 基因集秩和检验 + 表达率双口径互证（CELLEX/CELLECT 均为 GPL-3，独立实现）",
+    "lib.proteomics": "蛋白组差异 + **RNA-蛋白断层（唯一裁决点）**：moderated t + 一致/断层/弱断层三分类 + 二项检验",
+    "lib.composition": "供体层级差异丰度（成分数据）：Dirichlet-Multinomial + L1 选变量 + 供体 bootstrap（模型源自 scCODA，BSD-3；推断引擎已换底）",
+    "lib.druggable": "可成药映射与干预窗口：基因→药物→给药途径分层 + X% 已上市药靶 + 阳性对照门（离线确定性，不碰网络）",
 }
 # 每个分析法模块的**可导入性**逐项探测（不靠 tier1_ready 一刀切：
 # 某个模块缺依赖时，其余模块必须照常报可用，否则会误报「功能缺失」）
@@ -94,6 +101,7 @@ LIB_MODULES = [
     "network", "singlecell", "pathway", "immune", "regularized", "meta",
     "causal", "prs", "finemap", "mutational", "spatial", "trajectory", "power",
     "batch", "cellcomm", "gxe", "epigen", "age_onset", "scrublet",
+    "lm", "pseudobulk", "specificity", "proteomics", "composition", "druggable",
 ]
 ZERO_DEP_IN_VENDOR = {
     "registry": "函数注册表（中英文检索 + 前置校验，纯标准库）",

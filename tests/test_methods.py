@@ -52,6 +52,7 @@ class TestAllMethodsImportable(unittest.TestCase):
         "network", "singlecell", "pathway", "immune", "regularized", "meta",
         "causal", "prs", "finemap", "mutational", "spatial", "trajectory", "power",
         "batch", "cellcomm", "gxe", "epigen", "age_onset", "scrublet",
+        "lm", "pseudobulk", "specificity", "proteomics", "composition", "druggable",
     ]
 
     def test_import_all(self):
@@ -1288,6 +1289,398 @@ class TestScrublet(unittest.TestCase):
         self.assertIn("SCORED True", out)
 
 
+class TestPseudobulk(unittest.TestCase):
+    """供体层级聚合：防伪重复的第一道闸门。"""
+
+    def test_sum_counts_matches_handcalc(self):
+        """定向：聚合值必须等于手算的 log1p(CPM)，不是"能跑通"就算过。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import pseudobulk as P\n"
+            "C=np.array([[10.,0.,5.],[0.,20.,5.],[30.,0.,10.]],dtype=float)\n"
+            "r=P.aggregate(C,['d1','d1','d2'],gene_names=['a','b','c'])\n"
+            "e=r['expr']\n"
+            "tot1=10+0+5+0+20+5; tot2=30+0+10\n"
+            "want1=np.log1p(np.array([10.,20.,10.])/tot1*1e4)\n"
+            "want2=np.log1p(np.array([30.,0.,10.])/tot2*1e4)\n"
+            "print('ERR1',float(np.abs(e.loc['d1'].values-want1).max()))\n"
+            "print('ERR2',float(np.abs(e.loc['d2'].values-want2).max()))\n"
+            "print('NDONOR',r['n_donors'])\n"
+            "print('LOW',r['n_low_cells_donors'])\n")
+        v = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        self.assertLess(float(v["ERR1"]), 1e-9)
+        self.assertLess(float(v["ERR2"]), 1e-9)
+        self.assertEqual(int(v["NDONOR"]), 2)
+        self.assertEqual(int(v["LOW"]), 2, "每个供体都不足 10 细胞，必须如实标记")
+
+    def test_invariant_to_cell_order(self):
+        """不变性：打乱细胞顺序不得改变聚合结果。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import pseudobulk as P\n"
+            "rng=np.random.default_rng(4)\n"
+            "C=rng.poisson(3,(200,20)).astype(float)\n"
+            "d=np.repeat(['a','b','c','d'],50)\n"
+            "r1=P.aggregate(C,d,min_cells=10)\n"
+            "idx=rng.permutation(200)\n"
+            "r2=P.aggregate(C[idx],d[idx],min_cells=10)\n"
+            "# 必须按供体对齐再比：pd.unique 按首次出现排序，打乱细胞顺序会\n"
+            "# 改变供体的行序，直接比 .values 是在拿 a 行对 b 行。\n"
+            "a=r1['expr'].sort_index(); b=r2['expr'].sort_index()\n"
+            "print('MAXDIFF',float(np.abs(a.values-b.values).max()))\n")
+        self.assertLess(float(out.split()[-1]), 1e-9)
+
+    def test_negative_inputs_raise(self):
+        """负向：标签错位 / NaN / 非法口径都必须报错，不许静默。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import pseudobulk as P\n"
+            "C=np.ones((6,3))\n"
+            "for bad,lab in [(lambda: P.aggregate(C,['a','b']),'LEN'),\n"
+            "                (lambda: P.aggregate(np.where(np.arange(18).reshape(6,3)==0,np.nan,1.0),['a']*6),'NAN'),\n"
+            "                (lambda: P.aggregate(C,['a']*6,how='bogus'),'HOW')]:\n"
+            "    try:\n"
+            "        bad(); print(lab,'False')\n"
+            "    except Exception: print(lab,'True')\n")
+        for tok in ("LEN", "NAN", "HOW"):
+            self.assertIn(f"{tok} True", out)
+
+
+class TestSpecificity(unittest.TestCase):
+    """细胞类型特异性（唯一裁决点）。
+
+    这里的**方向性**断言是专门用来抓一类 bug 的：初版把基线写成
+    "表达加权均值"，结果越特异的基因分越低（单调性反了）。只断言
+    "能跑通"抓不到它，必须同时算"极度特异"和"完全均匀"两个方向。
+    """
+
+    def test_monotonicity_exclusive_gt_uniform(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import specificity as S\n"
+            "E=np.array([[10,0,0,0],[10,1,1,1],[5,5,5,5]],dtype=float)\n"
+            "r=S.specificity(E,gene_names=['excl','bias','flat'])\n"
+            "es=r['es']\n"
+            "print('EXCL',round(float(es.loc['excl'].max()),4))\n"
+            "print('BIAS',round(float(es.loc['bias'].max()),4))\n"
+            "print('FLAT',round(float(es.loc['flat'].max()),4))\n"
+            "print('LOG2K',round(float(np.log2(4)),4))\n")
+        v = {l.split()[0]: float(l.split()[-1]) for l in out.splitlines() if l.split()}
+        self.assertAlmostEqual(v["EXCL"], v["LOG2K"], places=3,
+                               msg="只在一种细胞表达 → ES 应等于 log2(K)")
+        self.assertGreater(v["EXCL"], v["BIAS"], "特异基因必须高于偏置基因")
+        self.assertGreater(v["BIAS"], v["FLAT"], "偏置基因必须高于均匀基因")
+        self.assertAlmostEqual(v["FLAT"], 0.0, places=6)
+
+    def test_gene_set_detects_true_enrichment(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import specificity as S\n"
+            "rng=np.random.default_rng(3); K=5; n=200\n"
+            "E=rng.gamma(2,1,(n,K))\n"
+            "E[:20,0]=E[:20,0]*8\n"
+            "r=S.specificity(E,gene_names=[f'g{i}' for i in range(n)],\n"
+            "                cell_types=[f'c{i}' for i in range(K)])\n"
+            "t=S.gene_set_test(r,[f'g{i}' for i in range(20)])\n"
+            "tab=t['table']\n"
+            "print('TOP',str(tab.sort_values('padj').iloc[0]['cell_type']))\n"
+            "print('PADJ',float(tab[tab['cell_type']=='c0']['padj'].iloc[0]))\n"
+            "print('MINPADJ_OTHER',float(tab[tab['cell_type']!='c0']['padj'].min()))\n")
+        v = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        self.assertEqual(v["TOP"], "c0")
+        self.assertLess(float(v["PADJ"]), 0.05)
+        self.assertGreater(float(v["MINPADJ_OTHER"]), 0.05, "非富集类型不得显著")
+
+    def test_negative_inputs_raise(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import specificity as S\n"
+            "r=S.specificity(np.array([[1.,2.],[3.,4.]]))\n"
+            "for bad,lab in [(lambda: S.specificity(np.array([[-1.,2.],[3.,4.]])),'NEG'),\n"
+            "                (lambda: S.gene_set_test(r,['nope1','nope2']),'MISS'),\n"
+            "                (lambda: S.specificity(np.array([[1.,2.]]),caliber='bogus'),'CAL')]:\n"
+            "    try:\n"
+            "        bad(); print(lab,'False')\n"
+            "    except Exception: print(lab,'True')\n")
+        for tok in ("NEG", "MISS", "CAL"):
+            self.assertIn(f"{tok} True", out)
+
+
+class TestProteomics(unittest.TestCase):
+    """蛋白组差异 + RNA-蛋白断层（唯一裁决点）。"""
+
+    def test_dep_recovery_and_sign(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import proteomics as PT\n"
+            "rng=np.random.default_rng(5); n=40; m=300\n"
+            "grp=np.array([0]*20+[1]*20)\n"
+            "I=rng.normal(10,1,(n,m)); I[grp==1,:40]+=1.5\n"
+            "r=PT.differential(I,grp,protein_names=[f'p{i}' for i in range(m)])\n"
+            "s=PT.dep_summary(r)\n"
+            "sig=r['table'][r['table']['padj']<0.05]\n"
+            "print('NDEP',s['n_dep'])\n"
+            "print('TP',int(sum(int(p[1:])<40 for p in sig['protein'])))\n"
+            "print('NUP',int((sig['log2FC']>0).sum()))\n")
+        v = {l.split()[0]: int(l.split()[-1]) for l in out.splitlines() if l.split()}
+        self.assertGreaterEqual(v["TP"], 36, "40 个真差异蛋白应基本全检出")
+        # 真效应全是上调；允许至多 2 个反向假阳性（FDR 5% 下 260 个零假设
+        # 蛋白里冒 1–2 个是正常的，硬断言"一个都不许有"会变成 flaky 测试）
+        self.assertLessEqual(v["NDEP"] - v["NUP"], 2, "反向命中过多，方向可能反了")
+
+    def test_discordance_counts_injected_discordance(self):
+        """定向：人为反转 10 个基因的蛋白方向 → 必须恰好数出 10 个断层。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import proteomics as PT\n"
+            "rng=np.random.default_rng(5); n=40; m=300\n"
+            "grp=np.array([0]*20+[1]*20)\n"
+            "I=rng.normal(10,1,(n,m)); I[grp==1,:40]+=1.5\n"
+            "r=PT.differential(I,grp,protein_names=[f'p{i}' for i in range(m)])\n"
+            "rna=r['table'].rename(columns={'protein':'gene'})\n"
+            "prot=r['table'].copy(); prot.loc[30:39,'log2FC']*=-1\n"
+            "d=PT.rna_protein_discordance(rna,prot)\n"
+            "print('CONC',d['n_concordant'])\n"
+            "print('DISC',d['n_discordant'])\n"
+            "print('RATE',round(d['strict_rate'],8))\n"
+            "print('BINOM',round(d['binomial_p'],5))\n")
+        v = {l.split()[0]: float(l.split()[-1]) for l in out.splitlines() if l.split()}
+        self.assertEqual(int(v["DISC"]), 10, "注入 10 个断层就必须数出 10 个")
+        self.assertGreater(int(v["CONC"]), int(v["DISC"]))
+        # 断言"率 = 分子/分母"这条**恒等式**，而不是硬编码 30/40——
+        # 分母随噪声浮动，写死期望值会在换数据时变成假失败。
+        self.assertAlmostEqual(
+            v["RATE"], v["CONC"] / (v["CONC"] + v["DISC"]), places=6)
+        self.assertLess(v["BINOM"], 0.05)
+
+    def test_negative_inputs_raise(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import proteomics as PT\n"
+            "rng=np.random.default_rng(0)\n"
+            "grp=np.array([0]*10+[1]*10)\n"
+            "I=rng.normal(10,1,(20,8))\n"
+            "nanI=I.copy(); nanI[0,0]=np.nan\n"
+            "negI=I.copy(); negI[0,0]=-1.0\n"
+            "r=PT.differential(I,grp)\n"
+            "a=r['table'].rename(columns={'protein':'gene'})\n"
+            "b=r['table'].rename(columns={'protein':'gene'})\n"
+            "b['gene']=['zzz%d'%i for i in range(8)]\n"
+            "for bad,lab in [(lambda: PT.differential(nanI,grp),'NAN'),\n"
+            "                (lambda: PT.differential(negI,grp,log2_input=False),'NEG'),\n"
+            "                (lambda: PT.rna_protein_discordance(a,b),'MISMATCH')]:\n"
+            "    try:\n"
+            "        bad(); print(lab,'False')\n"
+            "    except Exception: print(lab,'True')\n")
+        for tok in ("NAN", "NEG", "MISMATCH"):
+            self.assertIn(f"{tok} True", out)
+
+
+class TestComposition(unittest.TestCase):
+    """供体层级差异丰度（scCODA 模型族，推断引擎已换，差异已标注）。"""
+
+    def test_recovers_true_compositional_shift(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import composition as CP\n"
+            "rng=np.random.default_rng(7); n=18; K=5\n"
+            "base=np.array([200,300,250,150,100],dtype=float); base=base/base.sum()\n"
+            "age=np.linspace(20,80,n); z=(age-age.mean())/10\n"
+            "Y=np.zeros((n,K))\n"
+            "for i in range(n):\n"
+            "    p=base.copy(); p[0]*=np.exp(0.35*z[i]); p=p/p.sum()\n"
+            "    Y[i]=rng.multinomial(1000,p)\n"
+            "X=np.column_stack([np.ones(n),z])\n"
+            "r=CP.test(Y,X,covariate_names=['intercept','age'],B=100,seed=1)\n"
+            "s=CP.summary(r)\n"
+            "sig=s['significant']\n"
+            "print('NSIG',s['n_significant'])\n"
+            "print('TOP',str(sig.iloc[0]['cell_type']) if len(sig) else 'none')\n"
+            "print('EST',round(float(sig.iloc[0]['estimate']),3) if len(sig) else -9)\n"
+            "print('CIIN',bool(sig.iloc[0]['ci_low']<=0.35<=sig.iloc[0]['ci_high']) if len(sig) else False)\n")
+        v = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        self.assertEqual(int(v["NSIG"]), 1, "只有 ct0 真变，不该多报")
+        self.assertEqual(v["TOP"], "ct0")
+        self.assertAlmostEqual(float(v["EST"]), 0.35, delta=0.12,
+                               msg="效应量须接近真值 0.35（无 L1 收缩偏差）")
+        self.assertEqual(v["CIIN"], "True", "bootstrap CI 应覆盖真值")
+
+    def test_null_data_yields_no_discovery(self):
+        """零假设下不得报发现（假阳性控制，判据同实测：B≥100）。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import composition as CP\n"
+            "rng=np.random.default_rng(11); tot=0\n"
+            "for s in range(6):\n"
+            "    n=18\n"
+            "    Y=rng.multinomial(1000,np.ones(5)/5,size=n).astype(float)\n"
+            "    X=np.column_stack([np.ones(n),rng.normal(size=n)])\n"
+            "    tot+=CP.summary(CP.test(Y,X,B=100,seed=s))['n_significant']\n"
+            "print('FP',tot)\n")
+        self.assertEqual(int(out.split()[-1]), 0,
+                         "24 次零假设检验不得出现假阳性")
+
+    def test_negative_inputs_raise(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import composition as CP\n"
+            "rng=np.random.default_rng(2); n=18\n"
+            "Y=rng.multinomial(1000,np.ones(5)/5,size=n).astype(float)\n"
+            "X=np.column_stack([np.ones(n),rng.normal(size=n)])\n"
+            "for bad,lab in [(lambda: CP.test(Y*1.5,X),'NONINT'),\n"
+            "                (lambda: CP.test(Y/Y.sum(1,keepdims=True),X),'PROP'),\n"
+            "                (lambda: CP.test(Y[:2],X[:2]),'FEWDONOR'),\n"
+            "                (lambda: CP.test(Y,X,B=40),'SMALLB')]:\n"
+            "    try:\n"
+            "        bad(); print(lab,'False')\n"
+            "    except Exception: print(lab,'True')\n")
+        for tok in ("NONINT", "PROP", "FEWDONOR", "SMALLB"):
+            self.assertIn(f"{tok} True", out)
+
+    def test_bootstrap_is_reproducible(self):
+        """同 seed 必须逐位可复现（否则 CI 与 p 无法复核）。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import composition as CP\n"
+            "rng=np.random.default_rng(2); n=18\n"
+            "Y=rng.multinomial(1000,np.ones(5)/5,size=n).astype(float)\n"
+            "X=np.column_stack([np.ones(n),rng.normal(size=n)])\n"
+            "a=CP.test(Y,X,B=100,seed=7); b=CP.test(Y,X,B=100,seed=7)\n"
+            "print('SAME',bool(np.allclose(a['table']['estimate'],b['table']['estimate']))\n"
+            "      and bool(np.allclose(a['table']['sel_freq'],b['table']['sel_freq'],equal_nan=True)))\n")
+        self.assertIn("SAME True", out)
+
+
+class TestDruggable(unittest.TestCase):
+    """可成药映射（离线确定性版）。"""
+
+    def test_report_matches_handcalc(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import pandas as pd\n"
+            "from lib import druggable as G\n"
+            "D=pd.DataFrame([\n"
+            " ['CRYAA','lanosterol','approved','topical'],\n"
+            " ['CRYAA','compound-x','experimental','oral'],\n"
+            " ['CRYAB','lanosterol','approved','ophthalmic'],\n"
+            " ['MIP','drug-a','approved','systemic'],\n"
+            " ['FOXE3','drug-b','withdrawn','topical'],\n"
+            "],columns=['gene','drug','status','route'])\n"
+            "m=G.map_genes(['CRYAA','CRYAB','MIP','FOXE3','NOPE'],D)\n"
+            "r=G.druggable_report(m)\n"
+            "print('N',r['n_genes'])\n"
+            "print('NAP',r['n_approved_target'])\n"
+            "print('PCT',r['pct_approved_drug_target'])\n"
+            "print('TOP',r['n_approved_topical'])\n"
+            "print('SYS',r['n_approved_systemic_only'])\n")
+        v = {l.split()[0]: float(l.split()[-1]) for l in out.splitlines() if l.split()}
+        self.assertEqual(int(v["N"]), 5)
+        self.assertEqual(int(v["NAP"]), 3, "CRYAA/CRYAB/MIP 是已上市药靶")
+        self.assertAlmostEqual(v["PCT"], 60.0, places=1)
+        self.assertEqual(int(v["TOP"]), 2, "眼局部可给药的只有 CRYAA/CRYAB")
+        self.assertEqual(int(v["SYS"]), 1, "MIP 只有全身给药")
+
+    def test_intervention_window_uses_drug_level_status(self):
+        """药物级标志：不能把实验药标成已上市（方向错了就是假结论）。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import pandas as pd\n"
+            "from lib import druggable as G\n"
+            "D=pd.DataFrame([\n"
+            " ['CRYAA','lanosterol','approved','topical'],\n"
+            " ['CRYAA','compound-x','experimental','oral'],\n"
+            "],columns=['gene','drug','status','route'])\n"
+            "m=G.map_genes(['CRYAA'],D)\n"
+            "o=pd.DataFrame({'gene':['CRYAA'],'onset_age':[42.0],'cell_type':['LEC']})\n"
+            "w=G.intervention_window(m,o,lead_years=5)\n"
+            "t=w['table'].set_index('drug')\n"
+            "print('LAN',bool(t.loc['lanosterol','approved']))\n"
+            "print('CPX',bool(t.loc['compound-x','approved']))\n"
+            "print('WIN',str(t.loc['lanosterol','window']))\n")
+        v = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        self.assertEqual(v["LAN"], "True")
+        self.assertEqual(v["CPX"], "False", "实验药不得被标成已上市")
+        self.assertEqual(v["WIN"], "37–42")
+
+    def test_positive_control_gate(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import pandas as pd\n"
+            "from lib import druggable as G\n"
+            "D=pd.DataFrame([['CRYAA','a','approved','topical']],\n"
+            "               columns=['gene','drug','status','route'])\n"
+            "m=G.map_genes(['CRYAA','NOPE'],D)\n"
+            "print('PASS',G.positive_control(m,['CRYAA'])['verdict'])\n"
+            "print('FAIL',G.positive_control(m,['CRYAA','NOPE'])['verdict'][:4])\n")
+        self.assertIn("PASS PASS", out)
+        self.assertIn("FAIL FAIL", out)
+
+    def test_negative_inputs_raise(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import pandas as pd\n"
+            "from lib import druggable as G\n"
+            "D=pd.DataFrame([['CRYAA','a','approved','topical']],\n"
+            "               columns=['gene','drug','status','route'])\n"
+            "bad_cols=pd.DataFrame([['CRYAA','a']],columns=['gene_name','drug_name'])\n"
+            "for bad,lab in [(lambda: G.map_genes(['CRYAA'],bad_cols),'COLS'),\n"
+            "                (lambda: G.map_genes(['ENSG1'],D),'MISS'),\n"
+            "                (lambda: G.map_genes([],D),'EMPTY'),\n"
+            "                (lambda: G.map_genes(['CRYAA'],pd.DataFrame()),'EMPTYTAB')]:\n"
+            "    try:\n"
+            "        bad(); print(lab,'False')\n"
+            "    except Exception: print(lab,'True')\n")
+        for tok in ("COLS", "MISS", "EMPTY", "EMPTYTAB"):
+            self.assertIn(f"{tok} True", out)
+
+
+class TestLMEngine(unittest.TestCase):
+    """moderated t 唯一裁决点（EWAS 与蛋白组共用同一套）。"""
+
+    def test_moderated_shrinks_and_is_shared(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import lm, epigen as E, proteomics as PT\n"
+            "rng=np.random.default_rng(9); n=30\n"
+            "grp=np.array([0]*15+[1]*15)\n"
+            "B=np.clip(0.5+rng.normal(0,0.05,(n,200)),0.01,0.99)\n"
+            "re_=E.diff_methylation(B,grp,moderated=True)\n"
+            "ro_=E.diff_methylation(B,grp,moderated=False)\n"
+            "print('D0',round(re_['d0'],3))\n"
+            "print('DIFF',bool(not np.allclose(re_['table']['pvalue'],ro_['table']['pvalue'])))\n"
+            "print('SHARED',re_['engine'].startswith('lib.epigen') and lm.__name__=='lib.lm')\n")
+        v = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        self.assertGreater(float(v["D0"]), 0, "moderated 必须给出正先验自由度")
+        self.assertEqual(v["DIFF"], "True")
+
+    def test_bh_adjust_is_monotone_and_bounded(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import lm\n"
+            "p=np.array([0.001,0.02,0.3,0.5,1.0])\n"
+            "q=lm.bh_adjust(p)\n"
+            "print('MONO',bool(np.all(np.diff(q)>=-1e-12)))\n"
+            "print('BOUND',bool(np.all(q>=p-1e-12)) and bool(np.all(q<=1.0)))\n"
+            "print('GE',bool(np.all(q>=p)))\n")
+        self.assertIn("MONO True", out)
+        self.assertIn("BOUND True", out)
+
+
 class TestAttributionHonesty(unittest.TestCase):
     """溯源必须如实：新增来源要登记，许可不得虚报。"""
 
@@ -1309,7 +1702,8 @@ class TestAttributionHonesty(unittest.TestCase):
         """手工移植件（PORTED-FILE）必须写明来源与许可。"""
         for rel in ("vendor/_sc/core.py", "vendor/_wgcna/core.py",
                     "vendor/_batch/core.py", "vendor/_cellcomm/core.py",
-                    "vendor/_scrublet/core.py", "vendor/_gam/core.py"):
+                    "vendor/_scrublet/core.py", "vendor/_gam/core.py",
+                    "vendor/_sccoda/core.py"):
             head = (PKG / rel).read_text(encoding="utf-8")[:700]
             self.assertIn("PORTED-FILE", head, f"{rel} 缺少 PORTED-FILE 声明")
             self.assertTrue(("BSD-3" in head) or ("MIT" in head) or ("Apache" in head),
