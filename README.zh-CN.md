@@ -7,7 +7,7 @@
 
 **面向生信与医学研究的「证据优先」工作流技能 —— 43 个主流分析法，AI 直接可跑。**
 
-[![版本](https://img.shields.io/badge/version-1.8.0-0d9488)](VERSION)
+[![版本](https://img.shields.io/badge/version-1.9.0-0d9488)](VERSION)
 [![许可证: MIT](https://img.shields.io/badge/License-MIT-8b5cf6.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-2563eb)](#环境要求)
 [![自检](https://img.shields.io/badge/self--check-216%20%2F%20219-16a34a)](tests/run_all.py)
@@ -145,7 +145,7 @@ python scripts/install_adapters.py --target all --project /path/to/proj
 | 层 | 位置 | 依赖 | 能做什么 |
 |---|---|---|---|
 | **Tier 0** | `scripts/` | Python 标准库 | 取回 / 核验 / 质控 / 位点计数 / 可信集过滤 / 区间注释 / 混杂审计 / 逐变异互证 / 报告门禁 |
-| **Tier 1** | `vendor/` + `lib/` | numpy + pandas + scipy | 43 个分析法中的绝大多数；纯 SVG 图表；函数注册表；报告规范对表 |
+| **Tier 1** | `vendor/` + `lib/` | numpy + pandas + scipy | 48 个分析法中的绝大多数；纯 SVG 图表；函数注册表；报告规范对表 |
 | **原生加速层** | `vendor/native/` | 无（单文件可执行） | 百万级 GWAS 汇总统计流式质控（3M 行 551 ms，约 11× Python） |
 
 `Tier 1` 的 22 个模块是**逐个探测可导入性**的：缺一个依赖不影响其余模块被判为可用。
@@ -181,7 +181,7 @@ python scripts/install_adapters.py --target all --project /path/to/proj
 
 ```
 med-biostat-skill/
-├── SKILL.md              入口总纲（路由 · 红线 · 判定门 · 43 个分析法总表）
+├── SKILL.md              入口总纲（路由 · 红线 · 判定门 · 48 个分析法总表）
 ├── VERSION
 ├── README.md             English
 ├── README.zh-CN.md       简体中文（本文件）

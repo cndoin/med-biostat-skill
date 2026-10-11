@@ -42,6 +42,21 @@ numba / pyvis 等依赖，整文件内嵌会带进一堆不可用依赖，故按
 | `vendor/_cellcomm/core.py` | ventolab/CellphoneDB · `src/core/methods/cpdb_statistical_analysis_helper.py` | **MIT** | 取 `mean_analysis`/`percent_analysis`/置换 p 值口径；去数据库+complex 绑定与多进程，改「用户传配受体表」的 numpy/pandas 接口 |
 | `vendor/_scrublet/core.py` | swolock/scrublet · `src/scrublet/*.py`；自动阈值取自 scikit-image · `skimage/filters/thresholding.py` | **MIT** / BSD-3-Clause | 取 `tot_counts_norm`/`runningquantile`/`get_vscores`/`filter_genes`/`simulate_doublets`/`_nearest_neighbor_classifier`/`call_doublets` 与 `threshold_minimum`；`sklearn PCA`→numpy SVD、`sklearn NearestNeighbors`/`annoy`→scipy cKDTree、去 numba/matplotlib、sparse→dense |
 | `vendor/_gam/core.py` | dswah/pyGAM · `pygam/{utils,penalties,pygam}.py` | **Apache-2.0** | 取 `gen_edge_knots`/`b_spline_basis`/`derivative`/`_pirls`(QR+SVD)/`_estimate_model_statistics`(edof·scale)/`_estimate_GCV_UBRE`；**只保留高斯族+identity+单变量样条**这条路径，去 progressbar2/sksparse 可选依赖，sparse→dense |
+| `vendor/_sccoda/core.py` | theislab/scCODA · `sccoda/model/*.py` | **BSD-3-Clause** | 模型照抄（层次 Dirichlet-Multinomial + softmax 链接 + 参考细胞类型 β≡0），**推断引擎换底**：上游用 numpyro/tfp 的 NUTS-HMC 给后验包含概率，这三个依赖不能作运行依赖内嵌，故改为「L1 选变量（λ 由 BIC 网格选）→ 选中支持集上无惩罚 MLE → 供体 bootstrap」。**`sel_freq` 不是后验包含概率、估计值不是后验均值**，结果 dict 带 `inference` 字段强制声明。未移植 tascCODA / nocoda / MCMC 诊断 / ArviZ 绘图 |
+
+### ⚠️ 第二处**已更正的错误记录**（2026-10-12）
+
+**CELLEX / CELLECT 曾被误记为 MIT，实为 GPL-3.0。**
+在为「白内障遗传风险 × 细胞类型 × 年龄 × 可成药」研究框架做工具满足度核查时，
+按记忆把 CELLEX（细胞类型特异性度量）当成了宽松许可，直到查 GitHub 官方
+SPDX 才发现**两个仓库都是 GPL-3.0**。同一次核查还发现
+`slowkow/harmonypy` 是 **GPL-3.0**、`immunogenomics/harmony` 是 **NOASSERTION**
+（Harmony 唯一可内嵌的实现是 `lilab-bcb/harmony-pytorch`，**BSD-3-Clause**）；
+`theislab/scCODA` 是 **BSD-3-Clause**（可用，但依赖 tensorflow + tfp + arviz）。
+
+教训与 2026-10-11 那条**完全同源**：许可判定必须查**权威来源的 SPDX 字段**。
+凭印象的许可记录会造成两种对称的错误——把能用的排除掉（scanpy）、
+把不能用的当成能用（CELLEX）。
 
 ### ⚠️ 一处**已更正的错误记录**（2026-10-11）
 
@@ -75,6 +90,8 @@ numba / pyvis 等依赖，整文件内嵌会带进一堆不可用依赖，故按
 | Hoffer Q | `hofferq_power` / `hofferq_refraction` | Hoffer KJ. *J Cataract Refract Surg* 1993;19(6):700-12（勘误 JCRS 2007;33(1):2） | 同上 | 同上 |
 | Holladay 1 | `holladay1_power` / `holladay1_refraction` | Holladay JT, Musgrove KH, Prager TC, et al. *J Cataract Refract Surg* 1988;14(1):17-24 | `enbrown/iol-calculations` 是 **AGPL-3.0**（传染性最强） | 同上 |
 | Haigis | `haigis_power` / `haigis_refraction` / `haigis_solve_d` | Haigis W, Lege B, Miller N, Schneider B. *Graefes Arch Clin Exp Ophthalmol* 2000;238(9):765-73 | 同上 | 另**对上一个公开算例**：`solve_d(24, 7.5, 21, −2) = 5.4615 mm` ✅ |
+| **细胞类型特异性 ES** | `lib/specificity.py::specificity` / `assign` / `gene_set_test` / `dual_evidence` | 公开描述的表达特异性度量思路（"某细胞类型的表达份额相对均匀分配"的 log2 富集，ESμ 风格）；逐细胞类型相对自身峰值的口径与 Yanai 2005 的 τ 特异度指数同源 | **CELLEX 与 CELLECT 都是 GPL-3.0**（2026-10-12 查官方 SPDX 确认），不能内嵌**也不能照抄其代码** | ① **方向性**：只在一类表达 → ES = log2(K)；偏置 > 均匀 = 0（这条断言抓出过一版"越特异分越低"的实现）；② 真富集基因集在对应细胞类型 padj 最小、其余类型不显著；③ **无法与 CELLECT 官方产物对拍**（GPL 不可用），只能与论文定性结论比对 |
+| **蛋白组 moderated t** | `lib/proteomics.py::differential` | Smyth GK. *Stat Appl Genet Mol Biol* 2004;3:Article3（与 EWAS 共用 `lib/lm` 的同一实现） | `limma` 是 GPL-2/GPL-3、`MSstats` 是 GPL-3 | 真差异蛋白回收 + 方向正确；与 EWAS **共用引擎**，两侧 p 值口径一致可直接比 |
 
 **常数与函数结构的核对来源**（公开技术说明，非代码复制）：
 Debellemanière G, et al. "The (not so) secret mechanisms behind classical thin lens IOL
@@ -129,3 +146,7 @@ optimization". IOL Solver；Haigis W. "The Haigis formula". In: Shammas HJ (ed).
 | `susieR` | NOASSERTION（许可非标准） | SuSiE 精细定位 | 按 Wang et al. 2020 (JRSS-B) 的 IBSS 实现：`lib/finemap.susie` |
 | `metafor` | GPL-2 | Meta 分析 | 按 DerSimonian-Laird / Egger 公开公式实现：`lib/meta` |
 | `Python-for-ophthalmologist` | **无 LICENSE** | 经典 vergence IOL 公式（SRK/T、Holladay、Hoffer Q、Haigis） | 仍缺（无 LICENSE = 默认保留全部权利，不可照抄） |
+| `CELLEX` / `CELLECT` | **GPL-3.0** | 细胞类型特异性度量（ESμ）与 GWAS×单细胞富集 | 按公开方法独立实现：`lib/specificity.py`。**数值不可与官方产物对比**；MAGMA/LDSC-SEG 侧的遗传力富集至今无替代，S2 主结论改走单细胞侧证据 |
+| `slowkow/harmonypy` | **GPL-3.0** | 单细胞 Harmony 批次整合 | 暂用 ComBat（`vendor/_batch`）降级替代；可内嵌的实现是 `lilab-bcb/harmony-pytorch`（BSD-3，需去 torch），尚未移植 |
+| `immunogenomics/harmony` | NOASSERTION | 同上（R 实现） | 同上 |
+| `MSstats` | **GPL-3** | 蛋白组差异与缺失值建模 | 走 `lib/lm` 的 moderated t（Smyth 2004）+ `lib/proteomics`；**蛋白组 MNAR 缺失的建模未覆盖**（本模块直接报错要求调用方先定策略） |

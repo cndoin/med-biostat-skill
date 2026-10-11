@@ -248,7 +248,7 @@ dhp / ptgds / lpdc 三个真实项目共用同一条链。**这条链可一条�
 
 ## 分析法总表（AI 调用的第一站：先查这张表，再动手）
 
-**43 个分析法 · 全部由程序确定性计算，AI 只负责选方法与读结果，不产生任何数值。**
+**48 个分析法 · 全部由程序确定性计算，AI 只负责选方法与读结果，不产生任何数值。**
 用户问「用什么方法分析」或「帮我做 X 分析」时，**先在这张表里定位**，再跳到对应模块。
 
 ### 一、因果与遗传（10 个）
@@ -328,6 +328,19 @@ dhp / ptgds / lpdc 三个真实项目共用同一条链。**这条链可一条�
 |---|---|---|---|
 | 42 | **双胞体检测（Scrublet）** | `lib.scrublet.detect_doublets` | **双胞体在轨迹推断里会伪装成「过渡态细胞」**，不清掉直接污染伪时间与失守曲线；须传**原始 counts**（归一化破坏「计数相加=双胞体」前提）；基因过滤后剩太少必须**报错**（否则 PCA 建在噪声上，分数看着正常却无判别力）；自动阈值是 advisory，**必须目视核对**；按供体分批时每批自含完整细胞类型 |
 | 43 | **年龄失守点（唯一裁决点）** | `lib.age_onset.fit_onset` / `screen_age_effects` | 全项目**只此一处**定义「几岁失守」；两种口径**默认 `ci_departure`**（CI 显著低于基线且此后持续），另一为 `relative_drop`；**趋势不显著一律返回 `onset_age=None`**（报一个年龄等于把噪声当发现）；**这是人口细胞测得的供体年龄，不是细胞年龄**；`pvalue` 为 F 近似 |
+
+### 八、供体层级与转化出口（5 个）
+
+> 这一组是 v1.9.0 新增，直接服务于「细胞类型 × 年龄 × 可成药」这类研究框架。
+> 共同主题：**细胞不是独立样本**，且**转化出口必须是一个算出来的百分比**。
+
+| # | 分析法 | 入口 | 关键口径 |
+|---|---|---|---|
+| 44 | **供体层级聚合（pseudobulk）** | `lib.pseudobulk.aggregate` / `aggregate_by_group` / `donor_summary` | 默认 `sum_counts`（**先按供体加 raw counts，再整体归一化**）；`mean_log` 是**有偏**的（log 的均值 ≠ 均值的 log），选了它必须带着口径报告；输入**必须是没有归一化的 counts**；含 NaN 直接报错（静默跳会把「没测到」当「表达量为 0」）；细胞数不足的供体**只标记不丢弃**（丢样本是调用方的决定） |
+| 45 | **细胞类型特异性（唯一裁决点）** | `lib.specificity.specificity` / `assign` / `gene_set_test` / `dual_evidence` | 默认 `share` 口径：ES = log2(该类型的表达份额 ÷ 均匀份额)，只在一种细胞表达 → log2(K)，完全均匀 → 0；**特异性 ≠ 表达量**，必须与检出率双口径互证（`dual_evidence`）才算排除"表达量伪影"；**CELLEX / CELLECT 均为 GPL-3，不可内嵌也不可照抄**，本模块是独立实现，数值不可与 CELLECT 产物对比；全零基因的 ES 是 **NaN 不是 0** |
+| 46 | **蛋白组差异 + RNA-蛋白断层（唯一裁决点）** | `lib.proteomics.differential` / `dep_summary` / `rna_protein_discordance` | 与 EWAS **共用 `lib.lm` 同一套 moderated t**，两侧 p 值才可比（"是否同向"依赖这件事）；断层**当发现写不当噪声**；一致性率的**分母是两侧都显著的基因**，另报宽松率备查；反向但只有一侧显著 → `weak_discordant`，**不进主计数**；蛋白缺失是 MNAR，含 NaN 一律报错不静默填 0 |
+| 47 | **供体层级差异丰度（成分数据）** | `lib.composition.test` / `counts_from_labels` / `effect_table` / `summary` | 模型来自 theislab/scCODA（**BSD-3-Clause**），但**推断引擎换过**：上游 HMC 后验 → 本实现是"L1 选变量（λ 由 BIC 网格选）+ 选中支持集上无惩罚 MLE + 供体 bootstrap"，所以 `sel_freq` **不是**后验包含概率、估计值**不是**后验均值；`estimate` 是**相对参考细胞类型的 log 丰度比**，不是比例变化量；**输入必须是整数计数**（喂比例不会报错，只会给错结果）；**B 下限 100**（实测 B=40 时零假设下出现假阳性）；**miloR 是 GPL-3，未覆盖 → 邻域级局部检验做不了，要写进局限** |
+| 48 | **可成药映射与干预窗口** | `lib.druggable.map_genes` / `druggable_report` / `intervention_window` / `positive_control` | **只吃本地已落盘药库**（DGIdb/ChEMBL/OpenTargets 是网络 API，不可复现，不进主链路）；必报 `pct_approved_drug_target`（摘要末句那个数字）；给药途径分层**眼局部 vs 全身**必须分开计数，混在一起等于把口服化疗药说成"白内障可用"；干预窗口表用**药物级**上市标志，不是基因级；结果必带 `status_values_seen` —— pct 为 0 时先怀疑**词表没对上**，别急着下"不可成药"结论 |
 
 ### 开源来源速查（谁提供了算法）
 

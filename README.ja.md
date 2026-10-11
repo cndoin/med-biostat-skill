@@ -7,7 +7,7 @@
 
 **バイオインフォマティクスと医学研究のための「エビデンス優先」ワークフロー・スキル —— AI エージェントがそのまま実行できる 43 の解析手法。**
 
-[![Version](https://img.shields.io/badge/version-1.8.0-0d9488)](VERSION)
+[![Version](https://img.shields.io/badge/version-1.9.0-0d9488)](VERSION)
 [![License: MIT](https://img.shields.io/badge/License-MIT-8b5cf6.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-2563eb)](#動作要件)
 [![Self-check](https://img.shields.io/badge/self--check-216%20%2F%20219-16a34a)](tests/run_all.py)

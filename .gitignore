@@ -30,6 +30,15 @@ _run*.err
 _caps*.json
 *.tmp
 
+# 安装器在本仓库根目录生成的**项目级入口指针**
+# （scripts/install_adapters.py 的产物，正文只在 SKILL.md；
+#   canonical 模板在 adapters/，那才是要入库的）
+AGENTS.md
+GEMINI.md
+.clinerules/
+.cursor/rules/
+.github/copilot-instructions.md
+
 # 编辑器 / 系统
 .idea/
 .vscode/

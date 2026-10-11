@@ -16,6 +16,9 @@
 | CellPhoneDB | [ventolab/CellphoneDB](https://github.com/ventolab/CellphoneDB) | MIT | `vendor/_cellcomm/` | [`_cellcomm/LICENSE`](vendor/_cellcomm/LICENSE) |
 | pearldgs_toolbox | [gdebel/pearldgs_toolbox](https://github.com/gdebel/pearldgs_toolbox) | MIT | `vendor/_ophtha/` | [`_ophtha/LICENSE`](vendor/_ophtha/LICENSE) |
 | rsomics-vcf | rsomics（源码级 fork） | MIT OR Apache-2.0 | `vendor/native/` | 见上游仓库 |
+| scrublet | [swolock/scrublet](https://github.com/swolock/scrublet) | MIT（自动阈值取自 scikit-image，BSD-3） | `vendor/_scrublet/` | 见上游仓库 |
+| pyGAM | [dswah/pyGAM](https://github.com/dswah/pyGAM) | Apache-2.0 | `vendor/_gam/` | 见上游仓库 |
+| scCODA | [theislab/scCODA](https://github.com/theislab/scCODA) | BSD-3-Clause | `vendor/_sccoda/` | [`_sccoda/LICENSE`](vendor/_sccoda/LICENSE) |
 
 ## 未内嵌的项目（GPL 等）
 
