@@ -19,13 +19,12 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any, Dict, Optional, Sequence
 
 import numpy as np
 import pandas as pd
-from scipy import stats
-from scipy.special import digamma, polygamma
+
+from . import lm
 
 __all__ = [
     "beta_to_m", "m_to_beta", "diff_methylation", "dmp_summary",
@@ -50,36 +49,10 @@ def m_to_beta(m):
     return x / (1.0 + x)
 
 
-def _solve_trigamma(target: float, lo: float = 1e-8, hi: float = 1e8,
-                    max_iter: int = 200) -> float:
-    """解 ``trigamma(x) = target``（trigamma 单调递减，用几何二分）。"""
-    for _ in range(max_iter):
-        mid = math.sqrt(lo * hi)
-        if polygamma(1, mid) > target:
-            lo = mid
-        else:
-            hi = mid
-    return math.sqrt(lo * hi)
-
-
-def _fit_f_dist(s2: np.ndarray, df: float) -> tuple[float, float]:
-    """Smyth 2004 的 `fitFDist`：由残差方差的样本矩估计先验 (d0, s0²)。
-
-    思路：``log(s2)`` 的期望与方差可写成 d0 与 s0² 的函数，反解即得先验。
-    d0 → ∞ 表示「各方差一样」，收缩最强；d0 小则接近普通 t 检验。
-    """
-    s2 = np.asarray(s2, dtype=float)
-    s2 = s2[np.isfinite(s2) & (s2 > 0)]
-    if s2.size < 3:
-        return 0.0, float(np.mean(s2)) if s2.size else 1.0
-    z = np.log(s2)
-    e = z - digamma(df / 2.0) + math.log(df / 2.0)
-    emean, evar = float(e.mean()), float(e.var(ddof=1))
-    target = evar - polygamma(1, df / 2.0)
-    if target <= 1e-12:
-        return float("inf"), math.exp(emean)      # 先验方差无限 → 完全收缩
-    d0 = 2.0 / _solve_trigamma(target)
-    return float(d0), float(math.exp(emean))
+# moderated t 引擎已收敛到 `lib.lm`（**唯一裁决点**，与蛋白组共用一套）。
+# 历史原因：本文件原先自带 `_fit_f_dist`；当 `lib.proteomics` 也需要同一套
+# 方差收缩时，两份实现会让 EWAS 与蛋白组的 p 值**不可比**——而 RNA-蛋白
+# 是否同向恰恰依赖两侧 p 值可比。故统一委托，本文件不再保留副本。
 
 
 def diff_methylation(beta, group: Sequence[Any],
@@ -120,29 +93,13 @@ def diff_methylation(beta, group: Sequence[Any],
         cols.append(np.asarray(covariates, dtype=float))
     X = np.column_stack(cols)
     n, p = X.shape
-    dof = n - p
-    if dof <= 0:
+    if n - p <= 0:
         raise ValueError(f"样本数 {n} 不足以拟合 {p} 个参数")
 
-    XtX_inv = np.linalg.pinv(X.T @ X)
-    cj = float(XtX_inv[1, 1])                     # 组效应项的杠杆
-    # work 形状为 (样本 × CpG)；beta_hat 为 (参数 × CpG)
-    beta_hat = XtX_inv @ X.T @ work               # (p, n_cpg)
-    resid = work - X @ beta_hat                   # (n, n_cpg)
-    s2 = (resid ** 2).sum(axis=0) / dof           # 每个 CpG 的残差方差
-    coef = beta_hat[1]
-
-    if moderated:
-        d0, s0sq = _fit_f_dist(s2, dof)
-        s2_post = (d0 * s0sq + dof * s2) / (d0 + dof)
-        dof_t = dof + d0
-        se = np.sqrt(s2_post * cj)
-    else:
-        d0, s0sq, dof_t = 0.0, float("nan"), dof
-        se = np.sqrt(s2 * cj)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        t = np.where(se > 0, coef / se, np.nan)
-    pval = 2 * stats.t.sf(np.abs(t), dof_t)
+    # 检验引擎收敛到 lib.lm（与 lib.proteomics 共用，保证两侧 p 值可比）
+    fit = lm.moderated_lm(work, X, coef_index=1, moderated=moderated)
+    pval = fit["pvalue"]
+    d0, s0sq, dof_t = fit["d0"], fit["s0_sq"], fit["dof"]
 
     # delta beta 报告在 beta 尺度（红线 1）：M 尺度系数 → beta 尺度近似差
     grp1, grp0 = (group == levels[1]), (group == levels[0])
@@ -150,18 +107,15 @@ def diff_methylation(beta, group: Sequence[Any],
         # 用组均值差作为 beta 尺度的效应量（更直观，且不受 logit 非线性影响）
         delta = np.nanmean(B[grp1], axis=0) - np.nanmean(B[grp0], axis=0)
     else:
-        delta = coef
+        delta = fit["coef"]
 
-    order = np.argsort(pval)
-    padj = np.empty_like(pval)
-    m = len(pval)
-    ranked = np.clip(pval[order] * m / (np.arange(m) + 1), 0, 1)
-    padj[order] = np.minimum.accumulate(ranked[::-1])[::-1]
+    padj = lm.bh_adjust(pval)
+    m = B.shape[1]
 
     table = pd.DataFrame({
         "cpg": [f"cpg{i}" for i in range(m)],
         "delta_beta": delta,
-        "t": t,
+        "t": fit["t"],
         "pvalue": pval,
         "padj": padj,
         "n_case": int(grp1.sum()),
@@ -172,7 +126,11 @@ def diff_methylation(beta, group: Sequence[Any],
         "n_clipped": n_clipped,
         "d0": float(d0),
         "s0_sq": float(s0sq) if np.isfinite(s0sq) else float("inf"),
-        "dof": int(dof_t),
+        # 不能用 int()：d0 可以是 inf（各 CpG 方差一致 → 完全收缩），
+        # 此时检验自由度是 inf，`int(inf)` 抛 OverflowError。
+        # 这个分支在"各特征方差真的一致"时会稳定触发（实测 n=30/σ=0.05 的
+        # 模拟数据就命中），不是边角情况。
+        "dof": float(dof_t),
         "use_m": bool(use_m),
         "moderated": bool(moderated),
         "method": ("limma-style moderated t (Smyth 2004)" if moderated
