@@ -51,6 +51,7 @@ class TestAllMethodsImportable(unittest.TestCase):
     MODULES = [
         "network", "singlecell", "pathway", "immune", "regularized", "meta",
         "causal", "prs", "finemap", "mutational", "spatial", "trajectory", "power",
+        "batch", "cellcomm", "gxe", "epigen", "age_onset", "scrublet",
     ]
 
     def test_import_all(self):
@@ -1011,6 +1012,282 @@ class TestCellAnnotation(unittest.TestCase):
         self.assertIn("RAISED True", out)
 
 
+class TestSingleCellExpressionRate(unittest.TestCase):
+    """表达率统计（S0 判决性预检的直接产出：判据「风险基因可检出吗」的执行者）。"""
+
+    def test_rate_values_and_degeneracy(self):
+        out = _run(
+            "import numpy as np, pandas as pd\n"
+            "from lib import singlecell as SC\n"
+            "genes=['G0','G1','MIP']\n"
+            "X=np.ones((30,3))*5.0\n"
+            "X[:15,1]=0.0            # G1 前 15 个细胞为 0\n"
+            "X[:,2]=0.0              # MIP 全部为 0\n"
+            "df=pd.DataFrame(X,columns=genes)\n"
+            "ct=np.array(['A']*20+['B']*10)\n"
+            "r=SC.expression_rate(df,ct,genes=genes)\n"
+            "m=r['pct_matrix']\n"
+            "print('G0_A',round(float(m.loc['A','G0']),1))\n"
+            "print('G1_A',round(float(m.loc['A','G1']),1))\n"
+            "print('MIP_A',round(float(m.loc['A','MIP']),1))\n"
+            "print('NCELLS',r['n_cells']['A'],r['n_cells']['B'])\n"
+            "d=SC.detectable_genes(r,min_pct=10.0)\n"
+            "print('DET',sorted(d['detectable']),'FRAC',round(d['fraction'],3))\n"
+            "print('RULE_MP',d['min_pct'])\n")
+        self.assertIn("G0_A 100.0", out)
+        # A 组 = 前 20 个细胞，其中前 15 个被置 0 -> 仅 5/20 检出
+        self.assertIn("G1_A 25.0", out)
+        self.assertIn("MIP_A 0.0", out)
+        self.assertIn("NCELLS 20 10", out)
+        # G1 全组 = 15/30 = 50% >= 10% → 可检出；MIP 不可检出
+        self.assertIn("DET ['G0', 'G1']", out)
+        self.assertIn("RULE_MP 10.0", out)
+
+    def test_threshold_is_honoured(self):
+        """口径必须真的起作用：阈值抬高后可检出基因必须变少。"""
+        out = _run(
+            "import numpy as np, pandas as pd\n"
+            "from lib import singlecell as SC\n"
+            "rng=np.random.default_rng(0)\n"
+            "df=pd.DataFrame(rng.normal(1,1,(50,5)),columns=[f'G{i}' for i in range(5)])\n"
+            "df.loc[5:,'LOWDET']=0.0\n"
+            "df['LOWDET']=0.0\n"
+            "df.loc[:4,'LOWDET']=2.0      # LOWDET 恰有 5/50 = 10% 细胞检出\n"
+            "ct=np.array(['A']*50)\n"
+            "r=SC.expression_rate(df,ct)\n"
+            "print('PCT',round(float(r['pct_matrix'].loc['A','LOWDET']),1))\n"
+            "print('LOW',SC.detectable_genes(r,min_pct=5.0)['n_detectable'])\n"
+            "print('HIGH',SC.detectable_genes(r,min_pct=50.0)['n_detectable'])\n")
+        self.assertIn("PCT 10.0", out)          # 前置条件：确实造出了 10% 检出率
+        low = int([l for l in out.splitlines() if l.startswith("LOW")][0].split()[-1])
+        high = int([l for l in out.splitlines() if l.startswith("HIGH")][0].split()[-1])
+        self.assertGreater(low, high, "提高检出阈值后『可检出』基因数必须减少")
+
+    def test_negative_cases(self):
+        out = _run(
+            "import numpy as np, pandas as pd\n"
+            "from lib import singlecell as SC\n"
+            "df=pd.DataFrame(np.ones((10,3)),columns=['A','B','C'])\n"
+            "try:\n"
+            "    SC.expression_rate(df,['x']*10,genes=['NOT1','NOT2'])\n"
+            "    print('NOERROR1')\n"
+            "except ValueError as e:\n"
+            "    print('E1', '一个都不在' in str(e))\n"
+            "try:\n"
+            "    SC.expression_rate(df,['x']*3)\n"
+            "    print('NOERROR2')\n"
+            "except ValueError as e:\n"
+            "    print('E2', '长度' in str(e))\n"
+            "r=SC.expression_rate(df,['x']*10,genes=['A','FAKE'])\n"
+            "print('PARTIAL', r.get('genes_not_found'))\n")
+        self.assertIn("E1 True", out)
+        self.assertIn("E2 True", out)
+        self.assertIn("PARTIAL ['FAKE']", out)   # 部分缺失必须报告，不得静默
+
+
+class TestAgeOnset(unittest.TestCase):
+    """失守点（唯一裁决点）——口径必须先于数值，不显著一律不给点。"""
+
+    def test_recovers_known_onset(self):
+        code = (
+            "import numpy as np\n"
+            "from lib import age_onset as AO\n"
+            "rng=np.random.default_rng(7)\n"
+            "age=np.linspace(0,80,500)\n"
+            "y=np.where(age<45,10.0,10.0-0.2*(age-45))+rng.normal(0,0.3,500)\n"
+            "r=AO.fit_onset(age,y,rule='ci_departure')\n"
+            "print('ONSET',round(r['onset_age'],1))\n"
+            "print('DIR',r['direction'])\n"
+            "print('DET',r['detected'])\n")
+        out = _run(code)
+        onset = float([l for l in out.splitlines() if l.startswith("ONSET")][0].split()[-1])
+        self.assertTrue(35.0 <= onset <= 52.0,
+                        f"真值 45 岁，失守点应在合理范围内，实测 {onset}")
+        self.assertIn("DIR down", out)
+        self.assertIn("DET True", out)
+
+    def test_flat_noise_gets_no_onset(self):
+        """无趋势时**必须**给 None —— 报一个年龄等于把噪声当发现。"""
+        out = _run(
+            "import numpy as np\n"
+            "from lib import age_onset as AO\n"
+            "rng=np.random.default_rng(1)\n"
+            "age=np.linspace(0,80,400)\n"
+            "r=AO.fit_onset(age,5.0+rng.normal(0,0.3,400))\n"
+            "print('ONSET',r['onset_age'])\n"
+            "print('DET',r['detected'])\n"
+            "print('DIR',r['direction'])\n")
+        self.assertIn("ONSET None", out)
+        self.assertIn("DET False", out)
+        self.assertIn("DIR flat", out)
+
+    def test_constant_expr_marked_degenerate(self):
+        out = _run(
+            "import numpy as np\n"
+            "from lib import age_onset as AO\n"
+            "age=np.linspace(0,80,200)\n"
+            "r=AO.fit_onset(age,np.full(200,7.0))\n"
+            "print('DEGEN',r['degenerate'])\n"
+            "print('ONSET',r['onset_age'])\n"
+            "print('DET',r['detected'])\n")
+        self.assertIn("DEGEN True", out)
+        self.assertIn("ONSET None", out)
+        self.assertIn("DET False", out)
+
+    def test_upward_is_not_onset(self):
+        out = _run(
+            "import numpy as np\n"
+            "from lib import age_onset as AO\n"
+            "rng=np.random.default_rng(3)\n"
+            "age=np.linspace(0,80,400)\n"
+            "r=AO.fit_onset(age,2.0+0.1*age+rng.normal(0,0.3,400))\n"
+            "print('DIR',r['direction'])\n")
+        self.assertIn("DIR up", out)
+
+    def test_rule_sensitivity_is_exposed(self):
+        """两种口径必须给出**不同**的年龄——这正是口径必须随数字输出的原因。"""
+        out = _run(
+            "import numpy as np\n"
+            "from lib import age_onset as AO\n"
+            "rng=np.random.default_rng(5)\n"
+            "age=np.linspace(0,80,500)\n"
+            "y=10.0-0.08*age+rng.normal(0,0.3,500)\n"
+            "a=AO.fit_onset(age,y,rule='ci_departure')\n"
+            "b=AO.fit_onset(age,y,rule='relative_drop',drop_fraction=0.5)\n"
+            "print('A',round(a['onset_age'],1))\n"
+            "print('B',round(b['onset_age'],1))\n"
+            "print('ARULE',a['rule'],'BRULE',b['rule'])\n")
+        a = float([l for l in out.splitlines() if l.startswith("A ")][0].split()[-1])
+        b = float([l for l in out.splitlines() if l.startswith("B ")][0].split()[-1])
+        self.assertLess(a, b, "CI 越界口径应早于 50% 降幅口径")
+        self.assertIn("ARULE ci_departure", out)
+        self.assertIn("BRULE relative_drop", out)
+
+    def test_screen_and_fdr(self):
+        out = _run(
+            "import numpy as np, pandas as pd\n"
+            "from lib import age_onset as AO\n"
+            "rng=np.random.default_rng(9)\n"
+            "n=400; age=np.linspace(0,80,n)\n"
+            "M=np.column_stack([\n"
+            "  np.where(age<50,9.0,9.0-0.25*(age-50))+rng.normal(0,0.3,n),\n"
+            "  4.0+rng.normal(0,0.3,n),\n"
+            "  np.full(n,2.0)])\n"
+            "df=pd.DataFrame(M,columns=['TREND','FLAT','CONST'])\n"
+            "r=AO.screen_age_effects(age,df,min_cells=50,n_splines=8)\n"
+            "t=r['table'].set_index('gene')\n"
+            "print('SIG',int(t.loc['TREND','padj']<0.05))\n"
+            "print('FLAT',int(t.loc['FLAT','padj']<0.05))\n"
+            "print('CONST_DEGEN',bool(t.loc['CONST','degenerate']))\n"
+            "print('NROWS',r['n_rows'])\n")
+        self.assertIn("SIG 1", out)
+        self.assertIn("FLAT 0", out)
+        self.assertIn("CONST_DEGEN True", out)
+        self.assertIn("NROWS 3", out)
+
+    def test_negative_cases(self):
+        out = _run(
+            "import numpy as np\n"
+            "from lib import age_onset as AO\n"
+            "for tag,fn in [('C1',lambda: AO.fit_onset(np.full(50,30.0),np.ones(50))),\n"
+            "               ('C2',lambda: AO.fit_onset(np.arange(5.0),np.ones(5))),\n"
+            "               ('C3',lambda: AO.fit_onset(np.arange(50.0),np.ones(50),rule='bad'))]:\n"
+            "    try:\n"
+            "        fn(); print(tag,'NOERROR')\n"
+            "    except ValueError:\n"
+            "        print(tag,'OK')\n")
+        for tag in ("C1", "C2", "C3"):
+            self.assertIn(f"{tag} OK", out)
+
+
+class TestScrublet(unittest.TestCase):
+    """双胞体检测——用**人工构造的 ground truth** 检验判别力（不是只看能不能跑）。"""
+
+    _MAKE = (
+        "import numpy as np\n"
+        "def mk(n,up,rng,ng=1200):\n"
+        "    base=rng.lognormal(-1.2,1.3,ng)\n"
+        "    E=np.zeros((n,ng))\n"
+        "    for i in range(n):\n"
+        "        f=np.ones(ng); f[up]=4.0\n"
+        "        E[i]=rng.poisson(base*f*rng.gamma(2.0,0.5))\n"
+        "    return E\n"
+        "def auc(sc,t):\n"
+        "    a=sc[t][:,None]>sc[~t][None,:]\n"
+        "    b=sc[t][:,None]==sc[~t][None,:]\n"
+        "    return (a.sum()+0.5*b.sum())/(t.sum()*(~t).sum())\n")
+
+    def test_detects_simulated_doublets(self):
+        out = _run(
+            self._MAKE +
+            "from lib import scrublet as SB\n"
+            "rng=np.random.default_rng(3)\n"
+            "A=mk(200,list(range(0,100)),rng); B=mk(200,list(range(100,200)),rng)\n"
+            "ia=rng.integers(0,200,40); ib=rng.integers(0,200,40)\n"
+            "E=np.vstack([A,B,A[ia]+B[ib]])\n"
+            "t=np.array([False]*400+[True]*40)\n"
+            "r=SB.detect_doublets(E,n_prin_comps=20,seed=0)\n"
+            "print('AUC',round(float(auc(r['scores'],t)),4))\n"
+            "print('NDOUB',r['n_doublets'])\n"
+            "print('THR_POS',r['thresholds']['all']>0)\n")
+        a = float([l for l in out.splitlines() if l.startswith("AUC")][0].split()[-1])
+        self.assertGreater(a, 0.85, f"对人工双胞体的判别力不足，AUC={a}")
+        self.assertIn("THR_POS True", out)
+
+    def test_per_batch_detection(self):
+        out = _run(
+            self._MAKE +
+            "from lib import scrublet as SB\n"
+            "rng=np.random.default_rng(4)\n"
+            "A1=mk(150,list(range(0,100)),rng); B1=mk(150,list(range(100,200)),rng)\n"
+            "A2=mk(150,list(range(0,100)),rng); B2=mk(150,list(range(100,200)),rng)\n"
+            "d1=A1[rng.integers(0,150,25)]+B1[rng.integers(0,150,25)]\n"
+            "d2=A2[rng.integers(0,150,25)]+B2[rng.integers(0,150,25)]\n"
+            "E=np.vstack([A1,B1,A2,B2,d1,d2])\n"
+            "t=np.array([False]*600+[True]*50)\n"
+            "b=['D1']*300+['D2']*300+['D1']*25+['D2']*25\n"
+            "r=SB.detect_doublets(E,batch=b,n_prin_comps=20,seed=0)\n"
+            "print('AUC',round(float(auc(r['scores'],t)),4))\n"
+            "print('NBATCH',len(r['thresholds']))\n"
+            "print('THR_DIFF',r['thresholds']['D1']!=r['thresholds']['D2'])\n")
+        a = float([l for l in out.splitlines() if l.startswith("AUC")][0].split()[-1])
+        self.assertGreater(a, 0.85, f"分批检测 AUC={a}")
+        self.assertIn("NBATCH 2", out)
+
+    def test_gene_filter_guard(self):
+        """保留基因过少必须报错 —— 否则 PCA 建在噪声上、分数看着正常却毫无判别力。"""
+        out = _run(
+            "import numpy as np\n"
+            "from lib import scrublet as SB\n"
+            "rng=np.random.default_rng(6)\n"
+            "try:\n"
+            "    SB.detect_doublets(rng.poisson(0.3,(200,300)).astype(float),n_prin_comps=10,seed=0)\n"
+            "    print('NOERROR')\n"
+            "except ValueError as e:\n"
+            "    print('GUARD', '基因' in str(e))\n")
+        self.assertIn("GUARD True", out)
+
+    def test_negative_and_small_batch(self):
+        out = _run(
+            self._MAKE +
+            "from lib import scrublet as SB\n"
+            "rng=np.random.default_rng(8)\n"
+            "E=mk(150,list(range(0,100)),rng)\n"
+            "try:\n"
+            "    SB.detect_doublets(np.full((40,10),-1.0)); print('N1 NOERROR')\n"
+            "except ValueError: print('N1 OK')\n"
+            "A=mk(200,list(range(0,100)),rng); B=mk(200,list(range(100,200)),rng)\n"
+            "big=np.vstack([A[:196],B[:196]])\n"
+            "tiny=np.vstack([A[196:200],B[196:200]])\n"
+            "r=SB.detect_doublets(np.vstack([big,tiny]),\n"
+            "                     batch=['big']*392+['tiny']*8,n_prin_comps=10,seed=0)\n"
+            "print('SKIP', 'tiny' in r['skipped_batches'])\n"
+            "print('SCORED', r['n_cells_scored'] < r['n_cells'])\n")
+        self.assertIn("N1 OK", out)
+        self.assertIn("SKIP True", out)
+        self.assertIn("SCORED True", out)
+
+
 class TestAttributionHonesty(unittest.TestCase):
     """溯源必须如实：新增来源要登记，许可不得虚报。"""
 
@@ -1031,10 +1308,11 @@ class TestAttributionHonesty(unittest.TestCase):
     def test_ported_files_declare_origin(self):
         """手工移植件（PORTED-FILE）必须写明来源与许可。"""
         for rel in ("vendor/_sc/core.py", "vendor/_wgcna/core.py",
-                    "vendor/_batch/core.py", "vendor/_cellcomm/core.py"):
-            head = (PKG / rel).read_text(encoding="utf-8")[:600]
+                    "vendor/_batch/core.py", "vendor/_cellcomm/core.py",
+                    "vendor/_scrublet/core.py", "vendor/_gam/core.py"):
+            head = (PKG / rel).read_text(encoding="utf-8")[:700]
             self.assertIn("PORTED-FILE", head, f"{rel} 缺少 PORTED-FILE 声明")
-            self.assertTrue(("BSD-3" in head) or ("MIT" in head),
+            self.assertTrue(("BSD-3" in head) or ("MIT" in head) or ("Apache" in head),
                             f"{rel} 未标注许可")
 
 

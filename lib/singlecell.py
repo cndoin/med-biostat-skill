@@ -247,3 +247,148 @@ def annotate_cells(log_expr, clusters, marker_sets, min_score: float = 0.0,
                  "ratio_to_runner_up < ambiguity_ratio 时标为不确定"),
         "engine": "lib.singlecell.annotate_cells",
     }
+
+
+# ── 表达率统计（S0 判决性预检的直接产出）──────────────────────────────────────
+def expression_rate(log_expr, groups, gene_names: Optional[Sequence[str]] = None,
+                    genes: Optional[Sequence[str]] = None,
+                    detection_threshold: float = 0.0) -> Dict[str, Any]:
+    """按分组统计每个基因的**检出率**与平均表达。
+
+    这是「判决性预检」的直接产出：判据「风险基因在该组织可检出吗」中的
+    "可检出"**必须由表达率定义**，不能凭印象或凭 marker 是否出现在差异表里。
+
+    **口径（随结果一起输出；改口径必须改这里，不允许在调用处临时换）**
+      · ``detection``：``X > detection_threshold`` 判为检出。默认 **0**
+        （"非零即检出"）。对已 log1p 的归一化矩阵与原始 counts，0 的含义一致
+        （都等价于"至少 1 个 count"）。数据若经过中心化等变换，**必须显式改阈值**
+        ——否则"检出率"会变成负数比例，毫无意义。
+      · ``denominator``：该组的**全部细胞数**。不丢弃细胞、不下采样。
+        丢弃细胞会同时改变分子与分母，是最隐蔽的一类偏差。
+      · ``mean_expr``：该组**全部细胞**的算术平均（**含未检出细胞**）。
+      · ``mean_expr_positive``：仅该组**阳性细胞**的平均。
+        两者都返回，避免"平均表达"四个字在不同人嘴里指不同的量。
+
+    :param log_expr: (细胞 × 基因) 矩阵（DataFrame 或 ndarray）
+    :param groups: 长度 = 细胞数 的分组标签（细胞类型 / 供体 / 年龄段）
+    :param gene_names: 基因名；``log_expr`` 是 DataFrame 时可省略
+    :param genes: 只统计这些基因（如风险基因列表），None = 全部
+    :return: dict
+        - ``table``: 长表（group × gene），列见下
+        - ``pct_matrix``: 宽表 (分组 × 基因) 的检出率百分比
+        - ``mean_matrix``: 宽表 (分组 × 基因) 的平均表达
+        - ``n_cells``: ``{分组: 细胞数}``
+        - ``detection_rule`` / ``mean_rule`` / ``engine``: 口径与来源
+    """
+    if hasattr(log_expr, "columns"):
+        all_genes = [str(c) for c in log_expr.columns]
+        X = log_expr.to_numpy(dtype=float)
+        idx = list(log_expr.index)
+    else:
+        X = np.asarray(log_expr, dtype=float)
+        if gene_names is None:
+            raise ValueError("ndarray 输入必须给 gene_names")
+        all_genes = [str(g) for g in gene_names]
+        idx = list(range(X.shape[0]))
+
+    if X.shape[0] != len(groups):
+        raise ValueError(f"groups 长度 {len(groups)} != 细胞数 {X.shape[0]}")
+
+    gnames = [str(g) for g in groups]
+    pos = {g: i for i, g in enumerate(all_genes)}
+
+    if genes is None:
+        sel = list(range(len(all_genes)))
+    else:
+        sel, missing = [], []
+        for g in genes:
+            g = str(g)
+            if g in pos:
+                sel.append(pos[g])
+            else:
+                missing.append(g)
+        if not sel:
+            raise ValueError(
+                f"指定基因一个都不在矩阵里（示例 {[str(x) for x in genes][:3]}）"
+                "——请检查基因命名（符号 vs Ensembl ID）与大小写")
+        sel_genes_missing = missing
+
+    sel = np.asarray(sel, dtype=int)
+    sub = X[:, sel]
+    hit = sub > float(detection_threshold)
+
+    uniq = list(dict.fromkeys(gnames))          # 保持出现顺序
+    rows, pct, mean, ncell = [], {}, {}, {}
+    for g in uniq:
+        m = np.array([x == g for x in gnames])
+        n = int(m.sum())
+        ncell[g] = n
+        h = hit[m]                              # (n, k)
+        s = sub[m]
+        n_det = h.sum(axis=0).astype(float)
+        p = np.divide(n_det, n, out=np.zeros_like(n_det), where=n > 0) * 100.0
+        mn = s.mean(axis=0) if n > 0 else np.full(s.shape[1], np.nan)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            mpos = np.where(n_det > 0, s.sum(axis=0) / np.where(n_det > 0, n_det, 1.0), np.nan)
+        for j, k in enumerate(sel):
+            rows.append({
+                "group": g, "gene": all_genes[k], "n_cells": n,
+                "n_detected": int(n_det[j]), "pct_detected": float(p[j]),
+                "mean_expr": float(mn[j]), "mean_expr_positive": float(mpos[j]),
+            })
+        pct[g] = {all_genes[k]: float(p[j]) for j, k in enumerate(sel)}
+        mean[g] = {all_genes[k]: float(mn[j]) for j, k in enumerate(sel)}
+
+    table = pd.DataFrame(rows)
+    pct_matrix = pd.DataFrame(pct).T
+    mean_matrix = pd.DataFrame(mean).T
+
+    out = {
+        "table": table,
+        "pct_matrix": pct_matrix,
+        "mean_matrix": mean_matrix,
+        "n_cells": ncell,
+        "detection_threshold": float(detection_threshold),
+        "detection_rule": (
+            f"X > {float(detection_threshold)} 判为检出（默认 0 = 非零即检出）；"
+            "分母为该组全部细胞数，不丢细胞、不下采样"),
+        "mean_rule": "mean_expr = 全部细胞算术平均（含阴性）；mean_expr_positive = 仅阳性细胞平均",
+        "engine": "lib.singlecell.expression_rate",
+    }
+    if genes is not None and sel_genes_missing:
+        out["genes_not_found"] = sorted(set(sel_genes_missing))
+    return out
+
+
+def detectable_genes(rates: Dict[str, Any], gene_list: Optional[Sequence[str]] = None,
+                     min_pct: float = 10.0, min_groups: int = 1) -> Dict[str, Any]:
+    """判定哪些基因算「可检出」——预检判据「≥N% 风险基因可检出」的执行者。
+
+    判据：在**至少 ``min_groups`` 个分组**中 ``pct_detected >= min_pct``。
+
+    ⚠️ **阈值必须显式给出并随结果输出**。默认 ``min_pct=10`` 是单细胞领域的
+    常见惯例（"某基因在该细胞类型表达"的宽松门槛），但它**不是定理**；
+    换阈值会改变结论，所以阈值进返回值，不允许只报数字不报门槛。
+    """
+    if "pct_matrix" not in rates:
+        raise ValueError("请传入 expression_rate() 的返回值")
+    pm = rates["pct_matrix"]
+    gl = [str(g) for g in gene_list] if gene_list is not None else list(pm.columns)
+    gl = [g for g in gl if g in pm.columns]
+    if not gl:
+        raise ValueError("gene_list 与 pct_matrix 无交集")
+
+    sub = pm[gl]
+    n_ok = (sub >= float(min_pct)).sum(axis=0)          # 每个基因达标的分组数
+    ok = [g for g in gl if int(n_ok[g]) >= int(min_groups)]
+    return {
+        "detectable": ok,
+        "not_detectable": [g for g in gl if g not in set(ok)],
+        "n_total": len(gl),
+        "n_detectable": len(ok),
+        "fraction": (len(ok) / len(gl)) if gl else float("nan"),
+        "min_pct": float(min_pct),
+        "min_groups": int(min_groups),
+        "rule": (f"在 >= {min_groups} 个分组中 pct_detected >= {min_pct}% 判为可检出"),
+        "engine": "lib.singlecell.detectable_genes",
+    }
