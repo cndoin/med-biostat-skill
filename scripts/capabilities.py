@@ -33,7 +33,7 @@ TIER0 = {
     "loci_count.py": "独立位点计数（LD/距离）",
     "loci_backbone.py": "可信集纯度过滤",
     "annotate_regions.py": "区间基因注释",
-    "confounder_audit.py": "混杂十二项审计",
+    "confounder_audit.py": "混杂审计（十二项 + --extended 三项单细胞/蛋白组专属：伪重复/整合伪影/细胞组成）",
     "cross_verify.py": "两套官方产物逐变异互证",
     "report_pipeline.py": "确定性文档流水线（MD→HTML→门禁）",
     # —— 药物靶点 MR 链（v1.2 新增，全部纯标准库）——
@@ -43,6 +43,7 @@ TIER0 = {
     "testing_family.py": "检验家族分层（主 Bonferroni / 次要 BH）",
     "replication_check.py": "外部复现检查（方向 / 样本重叠 / ancestry）",
     "trigger_check.py": "自动触发自检（description 覆盖度 + 不触发边界）",
+    "gates.py": "判定门前置落盘与校验（结构化阈值 + 指纹 + 事后只许收紧）",
 }
 TIER1 = {
     "core.stats": "多重检验/效应量/缺失/bootstrap/假设检验",
