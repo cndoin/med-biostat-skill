@@ -19,6 +19,15 @@
 | scrublet | [swolock/scrublet](https://github.com/swolock/scrublet) | MIT（自动阈值取自 scikit-image，BSD-3） | `vendor/_scrublet/` | 见上游仓库 |
 | pyGAM | [dswah/pyGAM](https://github.com/dswah/pyGAM) | Apache-2.0 | `vendor/_gam/` | 见上游仓库 |
 | scCODA | [theislab/scCODA](https://github.com/theislab/scCODA) | BSD-3-Clause | `vendor/_sccoda/` | [`_sccoda/LICENSE`](vendor/_sccoda/LICENSE) |
+| **harmony-pytorch** | [lilab-bcb/harmony-pytorch](https://github.com/lilab-bcb/harmony-pytorch) | BSD-3-Clause | `vendor/_harmony/` | [`_harmony/LICENSE`](vendor/_harmony/LICENSE) |
+
+**harmony-pytorch 的移植说明**（与上一个 AS IS 许可证系列一致，附 Article 3 义务）：
+本 skill 取用其 `harmony/harmony.py` 的**算法结构**（模糊 k-means + 多样性惩罚 +
+岭回归校正的交替迭代），**底座已替换**：torch.Tensor → numpy，`sklearn.cluster.KMeans`
+→ 自实现 k-means++ + Lloyd，并去掉 psutil / threadpoolctl 这两个纯性能设施
+（它们不参与任何数值计算）。许可文件为上游 BSD-3-Clause 全文，版权归
+The Broad Institute, Inc.、The General Hospital Corporation 与 Genentech, Inc.。
+**未做的一件事（如实标注）**：未与 torch 原始实现做逐位对拍（本机无 torch），只做性质比对。
 
 ## 未内嵌的项目（GPL 等）
 

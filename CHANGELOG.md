@@ -3,6 +3,51 @@
 本项目的所有重要变更都记录在此。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.10.0] — 2026-10-12
+
+### 新增 · 多组学整合与保真 5 个（分析法总数 48 → **53**）
+
+> 上一版补齐了 P0（不补就断链）；这一版补齐 **P1（补了才扛得住审稿）**：
+> 整合缺失会让「供体 == 批次」的假象贯穿全部下游分析，而整合过度会静默抹掉
+> 年龄信号 —— 两者都不报错。所以这一版的主题是 **先整合，再实测有没有整过头**。
+
+- **`lib/integration.py` —— Harmony 批次整合 + 保真诊断**（含 `vendor/_harmony/core.py`）。
+  源 `lilab-bcb/harmony-pytorch`（**BSD-3-Clause**；`slowkow/harmonypy` 是 GPL-3、
+  `immunogenomics/harmony` 是 NOASSERTION，均已排除）。算法逐句照抄、**底座换掉**：
+  torch → numpy、`sklearn.KMeans` → 自实现 k-means++ + Lloyd，去 psutil/threadpoolctl。
+- **`lib/nullcontrol.py` —— 随机匹配基因集零分布（阴性对照唯一裁决点）**。
+  回答「换成随便一组基因会不会一样显著」：按表达水平的**分位数分箱**等配额无放回抽样，
+  箱内候选不足时向相邻层外扩并把 `max_expansion` 报出来，**不**悄悄有放回凑数。
+- **`lib/paga.py` —— PAGA 簇间连通性**：`score = log(观测连边/期望连边)`，
+  期望按有向 kNN 图推（`k·n_a·(n_b−δ)/(N−1)`，行和 = `k·n_a`，测试里用这条恒等式断言自洽）。
+- **`lib/figs.py` —— Fig3 失守曲线图**：纯 SVG、确定性（同输入同一个字节，可进 git diff）、
+  无 matplotlib；**`detected=False` 时不画失守竖线**。
+
+### 修复（都是自检查出来的真 bug，不是文档改动）
+
+1. **`fidelity` 把信号最强判成没信号**（最隐蔽的一个）。
+   协变量被 embedding 完美解释时 R²=1 → F=∞ → p=NaN，而 informative 判据是
+   `p < α`，于是 **R²=1 被判成「整合前就没有信息」、retention 直接失去定义**。
+   方向完全反了，而且只在信号极强时出现。现改为 p=0（极端显著）。
+2. **Harmony `correction` 用了正在被修改的 Z 去算系数矩阵**（上游用的是原始 X），
+   等于按累计步长多次校正、会过冲。修为：系数归原始 X、累加归 Z。
+3. **Harmony 的早停会被目标上升误触发**：各轮目标算在不同的 embedding 上、跨轮不可比。
+   实测 2 批次大偏移下默认参数**只跑 1 轮**就收工（mixedness 0.891→0.777，没整干净），
+   跑满 10 轮才到 0.568 且生物团纯度反而更高。核心件保留上游默认但报 `stopped_by`，
+   **包装层默认 `stop_on_increase=False`**。
+4. **默认 θ=2.0 在大偏移下不够**：三批次实测 batch_mixing 的 normalized 只从 2.52
+   降到 1.49，θ=3 收敛到 1.18、θ≥4 饱和。结论写进 docstring 与测试：**别信默认值，调完实测**。
+5. `exp(-2/σ(1-cos))` 在 σ 很小时整行下溢为 0 → 行 L1 归一化变成 0/0 扩散 NaN。
+   改为先减行最大值（数学等价，因为随后是逐元素乘 ω + 行归一）。
+6. 单细胞批次（每批仅 1 个细胞）不再静默给 garbage：直接报错。
+
+### 关于「未证实的部分」（如实标注，不得省略）
+
+- `_harmony` **未与 torch 原版画面对拍**（本机无 torch），只做性质比对；
+- PAGA 用的是本仓库的自适应高斯核 connectivities 而非 umap 模糊单纯形集，
+  **绝对值不可与 scanpy `tl.paga` 逐位对比**，只能比拓扑；
+- Harmony 不保证留住任何协变量信号 —— 这事只能由 `fidelity` 实测。
+
 ## [1.9.0] — 2026-10-12
 
 ### 新增 · 供体层级与转化出口 5 个（分析法总数 43 → **48**）

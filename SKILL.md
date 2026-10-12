@@ -248,7 +248,7 @@ dhp / ptgds / lpdc 三个真实项目共用同一条链。**这条链可一条�
 
 ## 分析法总表（AI 调用的第一站：先查这张表，再动手）
 
-**48 个分析法 · 全部由程序确定性计算，AI 只负责选方法与读结果，不产生任何数值。**
+**53 个分析法 · 全部由程序确定性计算，AI 只负责选方法与读结果，不产生任何数值。**
 用户问「用什么方法分析」或「帮我做 X 分析」时，**先在这张表里定位**，再跳到对应模块。
 
 ### 一、因果与遗传（10 个）
@@ -342,6 +342,21 @@ dhp / ptgds / lpdc 三个真实项目共用同一条链。**这条链可一条�
 | 47 | **供体层级差异丰度（成分数据）** | `lib.composition.test` / `counts_from_labels` / `effect_table` / `summary` | 模型来自 theislab/scCODA（**BSD-3-Clause**），但**推断引擎换过**：上游 HMC 后验 → 本实现是"L1 选变量（λ 由 BIC 网格选）+ 选中支持集上无惩罚 MLE + 供体 bootstrap"，所以 `sel_freq` **不是**后验包含概率、估计值**不是**后验均值；`estimate` 是**相对参考细胞类型的 log 丰度比**，不是比例变化量；**输入必须是整数计数**（喂比例不会报错，只会给错结果）；**B 下限 100**（实测 B=40 时零假设下出现假阳性）；**miloR 是 GPL-3，未覆盖 → 邻域级局部检验做不了，要写进局限** |
 | 48 | **可成药映射与干预窗口** | `lib.druggable.map_genes` / `druggable_report` / `intervention_window` / `positive_control` | **只吃本地已落盘药库**（DGIdb/ChEMBL/OpenTargets 是网络 API，不可复现，不进主链路）；必报 `pct_approved_drug_target`（摘要末句那个数字）；给药途径分层**眼局部 vs 全身**必须分开计数，混在一起等于把口服化疗药说成"白内障可用"；干预窗口表用**药物级**上市标志，不是基因级；结果必带 `status_values_seen` —— pct 为 0 时先怀疑**词表没对上**，别急着下"不可成药"结论 |
 
+### 九、多组学整合与保真（5 个，v1.10.0）
+
+> 主题：**跨供体合并必须先整合、再实测整合有没有把生物学信号一起抹掉**。
+> 最后一行的"能不能用这张图做下游分析"，由这一组说了算。
+
+| # | 分析法 | 入口 | 关键口径 |
+|---|---|---|---|
+| 49 | **Harmony 批次整合** | `lib.integration.harmonize` | 源 lilab-bcb/harmony-pytorch（**BSD-3-Clause**），去 torch/sklearn 后为纯 numpy；**`stop_on_increase=False` 与上游默认不同**：各轮目标算在不同的 embedding 上、跨轮不可比，批次偏移大时第二轮目标就上升、判据立刻"收敛"→ 实测只跑 1 轮会残留批次，跑满 10 轮 normalized 从 2.52 降到 1.18；**默认 θ=2 在大偏移下不够**（仍有 1.49），θ=3 收敛到 1.18、θ≥4 饱和 → 调完必须实测；**batch 里不要放生物协变量**；单细胞批次（每批 1 个细胞）直接报错 |
+| 50 | **批次混合度** | `lib.integration.batch_mixing` | 报 `raw`（邻居同批次比例）与 `normalized = raw / Σp_b²`：批次不平衡时 raw 天然偏高，那是构成不是整合质量 → **只看 normalized**，≈1 表示混合到随机水平 |
+| 51 | **整合保真诊断** | `lib.integration.fidelity` / `covariate_variance` | 逐协变量比较整合前后"能被 embedding 解释的 R²"，`retention = r2_after / r2_before`；**verdict 取所有 informative 协变量中最差的那个**（PASS ≥0.7 / WARN ≥0.4 / FAIL <0.4）；整合前就不显著或不达标 → `UNINFORMATIVE`，**不能**拿来宣称保住了信号；**R²=1（信号最强）时 p=0 而非 NaN**（此处曾有 bug：把最强信号判成没信号）；这是嘴几何代理，不是因果也不是下游精度 |
+| 52 | **随机匹配基因集零分布（唯一裁决点）** | `lib.nullcontrol.gene_set_null` / `sample_matched` / `multi_set_null` | 解决"换成随便一组基因会不会一样显著"；**匹配变量 ≠ 被检验的统计量**（两者相同会直接报错：零分布标准差被压小 → z 被放大 → 更容易假阳性）；按表达水平**分位数分箱**等配额无放回抽样，箱内候选不足时向相邻层外扩并报 `max_expansion`；经验 p = (1+#更极端)/(1+n_iter)，加 1 保证可进 BH；多集合用 `multi_set_null` 走 **`lib.lm.bh_adjust`**（全项目同一实现） |
+| 53 | **PAGA 簇间连通性** | `lib.paga.paga_connectivity` / `paga_tree` | score = log(观测连边/期望连边)，期望按有向 kNN 图推：`k·n_a·(n_b−δ)/(N−1)`（行和 = k·n_a，以此断言自洽）；**绝对值不可跨数据集/跨参数比**，只能按同图内排序或用 threshold 判"哪些簇是真邻居"；`paga_tree` 是**连通性**的生成树不是谱系树，`root` 只给跳数不给先后顺序；去指导思想：connectivities 用自适应高斯核而非 umap 模糊单纯形集，**不可与 scanpy tl.paga 逐位对比** |
+
+> **Fig3 失守曲线图**：`lib.figs.onset_curve` —— 吃 `lib.age_onset.fit_onset` 的输出，画 GAM 拟合 + **逐点** 95% CI（不是同时置信带）+ 基线带；**`detected=False` 时不画失守竖线**（趋势不显著却在图上画一条线，是最容易骗到自己的视觉伪证）；同输入必出同一字节（可进 git diff）。
+
 ### 开源来源速查（谁提供了算法）
 
 | 分析法组 | 上游开源项目 | 许可 | 内嵌位置 |
@@ -355,6 +370,8 @@ dhp / ptgds / lpdc 三个真实项目共用同一条链。**这条链可一条�
 | 细胞通讯 | ventolab/CellphoneDB | MIT | `vendor/_cellcomm/` + `lib/cellcomm.py` |
 | 双胞体检测 | swolock/scrublet（+ scikit-image 的 `threshold_minimum`） | MIT / BSD-3-Clause | `vendor/_scrublet/` + `lib/scrublet.py` |
 | 广义可加模型 GAM | dswah/pyGAM | Apache-2.0 | `vendor/_gam/` + `lib/age_onset.py` |
+| 差异丰度（成分数据） | theislab/scCODA | BSD-3-Clause | `vendor/_sccoda/` + `lib/composition.py` |
+| **批次整合 Harmony** | lilab-bcb/harmony-pytorch | BSD-3-Clause | `vendor/_harmony/` + `lib/integration.py` |
 | 其余（正则化/Meta/因果/PRS/SuSiE/空间/轨迹…） | 自研（口径对齐公开文献，无 GPL 依赖） | 本 skill | `lib/*.py` |
 
 完整许可与「未内嵌」决策记录见 `vendor/ATTRIBUTION.md`（含一处**已更正的错误**：

@@ -5,9 +5,9 @@
   <img src="assets/brand.svg" alt="biostat-copilot" width="760">
 </picture>
 
-**バイオインフォマティクスと医学研究のための「エビデンス優先」ワークフロー・スキル —— AI エージェントがそのまま実行できる 48 の解析手法。**
+**バイオインフォマティクスと医学研究のための「エビデンス優先」ワークフロー・スキル —— AI エージェントがそのまま実行できる 53 の解析手法。**
 
-[![Version](https://img.shields.io/badge/version-1.9.0-0d9488)](VERSION)
+[![Version](https://img.shields.io/badge/version-1.10.0-0d9488)](VERSION)
 [![License: MIT](https://img.shields.io/badge/License-MIT-8b5cf6.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-2563eb)](#動作要件)
 [![Self-check](https://img.shields.io/badge/self--check-216%20%2F%20219-16a34a)](tests/run_all.py)
@@ -139,7 +139,7 @@ python scripts/install_adapters.py --target all --project /path/to/proj
 | 層 | 場所 | 依存 | できること |
 |---|---|---|---|
 | **Tier 0** | `scripts/` | Python 標準ライブラリ | 取得 / 検証 / QC / 座位カウント / クレディブルセット絞り込み / 領域注釈 / 交絡監査 / 変異単位の相互検証 / レポートゲート |
-| **Tier 1** | `vendor/` + `lib/` | numpy + pandas + scipy | 48 手法の大半、純 SVG グラフ、関数レジストリ、報告規範チェックリスト |
+| **Tier 1** | `vendor/` + `lib/` | numpy + pandas + scipy | 53 手法の大半、純 SVG グラフ、関数レジストリ、報告規範チェックリスト |
 | **ネイティブ層** | `vendor/native/` | なし（単一実行ファイル） | 数百万行の GWAS 要約統計のストリーミング QC（300 万行 551 ms、Python の約 11 倍） |
 
 Tier 1 の 22 モジュールは** 1 つずつインポート可否を判定**します。1 つの依存欠落が他を「利用不可」と誤判定することはありません。
