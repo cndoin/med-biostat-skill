@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -179,6 +180,134 @@ class TestGateHasDiscrimination(unittest.TestCase):
         self.assertTrue(degenerate_gate(d))
         self.assertFalse(real_gate_pass, "真门禁必须能对坏输入说 FAIL")
         self.assertNotEqual(degenerate_gate(d), real_gate_pass)
+
+
+class TestGatesPreRegistration(unittest.TestCase):
+    """判定门前置落盘（scripts/gates.py）的负向验证。
+
+    这一组专门防一个**很隐蔽**的失效模式：门禁自己有 bug 时，
+    "门被改过"这类事件会被静默放行（`ok=true` + 退出码 0）。
+    2026-10-12 实测踩到过：指纹不匹配时 `ok` 仍是 true，
+    等于"检查指纹"这件事本身完全不设防。所以每条断言都同时查
+    **输出内容**与**退出码** —— 只查内容会漏掉"报错了但仍放行"。
+    """
+
+    def setUp(self):
+        self.proj = Path(tempfile.mkdtemp(prefix="biostat_gates_"))
+        (self.proj / "logs").mkdir(parents=True, exist_ok=True)
+        self.gfile = self.proj / "logs" / "gates.json"
+
+    def _init(self, *extra):
+        return H.run("gates.py", "--init", "--project", self.proj,
+                     "--min-detectable-rate", "0.6",
+                     "--min-lambda-gc-headroom", "1.1",
+                     "--min-positive-control-hits", "1",
+                     "--max-agreement-with-existing", "0.95",
+                     "--max-p-value", "0.05", "--json", *extra)
+
+    def _edit(self, mutate):
+        doc = json.loads(self.gfile.read_text(encoding="utf-8"))
+        mutate(doc)
+        self.gfile.write_text(json.dumps(doc, ensure_ascii=False, indent=2),
+                              encoding="utf-8")
+
+    def test_missing_gate_file_fails(self):
+        """判定门没落盘 = 门禁最该拦的场景。"""
+        code, data, err = H.run("gates.py", "--check", "--project", self.proj, "--json")
+        self.assertEqual(code, 1, "缺 gates.json 必须非零退出（否则 CI 会放行）")
+        self.assertFalse(data and data.get("ok"))
+
+    def test_fresh_gates_pass(self):
+        code, data, _ = self._init()
+        self.assertEqual(code, 0, data)
+        self.assertTrue(data["ok"])
+        code, data, _ = H.run("gates.py", "--check", "--project", self.proj, "--json")
+        self.assertEqual(code, 0, "刚落盘、没动过，必须通过")
+        self.assertTrue(data["fingerprint_matches"])
+
+    def test_hand_edit_threshold_is_caught(self):
+        """**核心用例**：有人绕过 --amend 直接把阈值改松，必须被抓。"""
+        self._init()
+        self._edit(lambda d: d["gates"][1].update(threshold=0.01))
+        code, data, _ = H.run("gates.py", "--check", "--project", self.proj, "--json")
+        self.assertEqual(code, 1, "手改阈值必须非零退出")
+        self.assertFalse(data["ok"])
+        self.assertFalse(data["fingerprint_matches"])
+
+    def test_relax_amend_is_refused(self):
+        """事后放宽阈值 = 最常见的事后合理化，必须拒绝。"""
+        self._init()
+        code, data, _ = H.run("gates.py", "--amend", "--project", self.proj,
+                              "--gate", "G2", "--min-detectable-rate", "0.3",
+                              "--reason", "想放宽", "--json")
+        self.assertEqual(code, 1)
+        self.assertFalse(data["ok"])
+        doc = json.loads(self.gfile.read_text(encoding="utf-8"))
+        g2 = [g for g in doc["gates"] if g["id"] == "G2"][0]
+        self.assertAlmostEqual(float(g2["threshold"]), 0.6, places=6,
+                               msg="放宽被拒后阈值必须原样不动")
+
+    def test_tighten_amend_allowed_and_traced(self):
+        """收紧允许，且必须留痕（旧阈值 + 理由）。"""
+        self._init()
+        code, data, _ = H.run("gates.py", "--amend", "--project", self.proj,
+                              "--gate", "G2", "--min-detectable-rate", "0.85",
+                              "--reason", "预检发现检出率偏低", "--json")
+        self.assertEqual(code, 0, data)
+        doc = json.loads(self.gfile.read_text(encoding="utf-8"))
+        g2 = [g for g in doc["gates"] if g["id"] == "G2"][0]
+        self.assertAlmostEqual(float(g2["threshold"]), 0.85, places=6)
+        self.assertIn("reason", g2["amended"])
+        self.assertAlmostEqual(float(g2["amended"]["previous_threshold"]), 0.6,
+                               places=6)
+
+    def test_amend_requires_reason(self):
+        self._init()
+        code, data, _ = H.run("gates.py", "--amend", "--project", self.proj,
+                              "--gate", "G2", "--min-detectable-rate", "0.9",
+                              "--json")
+        self.assertEqual(code, 1, "改门不留理由必须被拦")
+
+    def test_partial_criteria_rejected(self):
+        """只给一半判定条件（缺 threshold）必须报错，不许静默当待定。"""
+        self._init()
+        self._edit(lambda d: [g.pop("threshold", None) for g in d["gates"]
+                              if g["id"] == "G3"])
+        code, data, _ = H.run("gates.py", "--check", "--project", self.proj, "--json")
+        self.assertEqual(code, 1)
+        self.assertTrue(any("G3" in e for e in (data or {}).get("errors", [])))
+
+    def test_unknown_gate_rejected(self):
+        self._init()
+        code, data, _ = H.run("gates.py", "--amend", "--project", self.proj,
+                              "--gate", "G99", "--min-positive-control-hits", "2",
+                              "--reason", "x", "--json")
+        self.assertEqual(code, 1)
+
+    def test_confounder_audit_extended_items(self):
+        """混杂审计的 --extended：加项必须改变口径，且缺输入报 cannot_check。"""
+        proj = self.proj
+        code, data, _ = H.run("confounder_audit.py", "--project", proj, "--json")
+        self.assertEqual(code, 0, data)
+        self.assertEqual(data["n_items"], 12, "默认仍是十二项（不得改变既有口径）")
+        self.assertNotIn("extended", data.get("amended", []))
+
+        pb = proj / "logs" / "pb.json"
+        pb.write_text(json.dumps({"n_donors": 12, "n_cells": 8400}), encoding="utf-8")
+        code, data, _ = H.run("confounder_audit.py", "--project", proj,
+                              "--extended", "--pseudobulk", pb, "--json")
+        self.assertEqual(code, 0, data)
+        self.assertEqual(data["n_items"], 15)
+        names = [i["name"] for i in data["items"]]
+        self.assertTrue(any("伪重复" in n for n in names))
+        # 缺 --fidelity / --composition 必须是 cannot_check，不能写"未见异常"
+        by_name = {i["name"]: i for i in data["items"]}
+        fid = [i for i in data["items"] if "整合伪影" in i["name"]][0]
+        self.assertEqual(fid["status"], "cannot_check")
+        self.assertIsNone(fid["conclusion"])
+        comp = [i for i in data["items"] if "细胞组成" in i["name"]][0]
+        self.assertEqual(comp["status"], "cannot_check")
+        self.assertIsNone(comp["conclusion"])
 
 
 if __name__ == "__main__":

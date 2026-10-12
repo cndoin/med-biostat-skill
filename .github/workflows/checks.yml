@@ -39,6 +39,19 @@ jobs:
       - name: 自动触发覆盖
         run: python scripts/trigger_check.py
 
+      - name: 判定门脚本自检（正反双向）
+        run: |
+          python scripts/gates.py --init --project "$RUNNER_TEMP/gates_ci" \
+            --min-detectable-rate 0.6 --min-positive-control-hits 1 --json
+          python scripts/gates.py --check --project "$RUNNER_TEMP/gates_ci" --json
+          # 负向：事后放宽必须被拒（否则 CI 证明不了这条约束真的存在）
+          ! python scripts/gates.py --amend --project "$RUNNER_TEMP/gates_ci" \
+            --gate G2 --min-detectable-rate 0.3 --reason "ci-negative" --json
+
+      - name: 混杂审计扩展项（缺输入须报 cannot_check）
+        run: |
+          python scripts/confounder_audit.py --project "$RUNNER_TEMP/audit_ci" --json
+
   # ────────────────────────────────────────────────────────────────────────
   # 完整验证：跨平台 × 跨 Python 版本，装齐 Tier 1 科学栈。
   # ────────────────────────────────────────────────────────────────────────
