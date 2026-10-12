@@ -21,6 +21,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _common as C  # noqa: E402
 
 # 十二项定义（与 references/confounders.md 对齐）
+#
+# ⚠️ 这十二项是**为 GWAS / MR / 队列**设计的。对单细胞与蛋白组分析，它漏掉了
+# 三类该领域特有的主要混杂（2026-10-12 审查发现，故显式写出来而不是假装覆盖）：
+#   A. **伪重复**——把细胞当独立样本，样本量虚增两三个数量级，p 值必然假阳性；
+#      （`lib.pseudobulk` 是闸门，但闸门本身要有人确认过了）
+#   B. **整合伪影**——批次校正过头会把年龄/处理信号一起抹掉，且**不报错**；
+#      （`lib.integration.fidelity` 是判据）
+#   C. **细胞组成变化**——表观"某基因上调"可能只是某细胞类型比例变了；
+#      （`lib.composition` 是判据）
+# 补的处置方式见 EXTENDED_ITEMS：与十二项**并列**的领域扩展项，
+# 默认不计入 12（避免改变既有口径），用 --extended 打开。
 ITEMS = [
     (1, "群体分层", "lambda_gc"),
     (2, "年龄与性别", None),
@@ -34,6 +45,15 @@ ITEMS = [
     (10, "技术性伪影", "qc_issues"),
     (11, "信息偏倚", None),
     (12, "研究者自由度", "gates_predefined"),
+]
+
+# 领域扩展项（v1.10 新增）。刻意**不并进上面十二项**：
+# 十二项的编号与 references/confounders.md 已对齐多年，插新项会打断既有对照，
+# 而审计表的"共 N 项"口径一旦变了，历年报告就不可比。
+EXTENDED_ITEMS = [
+    (13, "伪重复（细胞当独立样本）", "pseudobulk_gate"),
+    (14, "整合伪影（信号被批次校正抹掉）", "integration_fidelity"),
+    (15, "细胞组成变化", "composition"),
 ]
 
 
@@ -79,6 +99,14 @@ def main() -> int:
     ap.add_argument("--sensitivity", default=None, help="多窗口结果 JSON（来自 loci_count）")
     ap.add_argument("--out", default=None)
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--extended", action="store_true",
+                    help="追加 3 项单细胞/蛋白组特有的混杂（伪重复 / 整合伪影 / 细胞组成）")
+    ap.add_argument("--pseudobulk", default=None,
+                    help="pseudobulk 聚合产物 JSON（供体×基因矩阵摘要）")
+    ap.add_argument("--fidelity", default=None,
+                    help="lib.integration.fidelity 的输出 JSON")
+    ap.add_argument("--composition", default=None,
+                    help="lib.composition.test 的输出 JSON")
     args = ap.parse_args()
 
     proj = Path(args.project)
@@ -87,9 +115,16 @@ def main() -> int:
     qc = C.read_json(logs / "qc_gwas.json")
     gates = C.read_json(logs / "gates.json")
     sens = C.read_json(args.sensitivity) if args.sensitivity else None
+    pb = C.read_json(args.pseudobulk) if args.pseudobulk else None
+    fid = C.read_json(args.fidelity) if args.fidelity else None
+    comp = C.read_json(args.composition) if args.composition else None
+
+    items = list(ITEMS)
+    if args.extended:
+        items = items + EXTENDED_ITEMS
 
     results = []
-    for num, name, dep in ITEMS:
+    for num, name, dep in items:
         rec = {"id": num, "name": name, "status": "manual_required",
                "evidence": None, "conclusion": None, "reason": None}
 
@@ -140,6 +175,51 @@ def main() -> int:
                        conclusion=("判定门已在动手前落盘" if gates
                                    else "未发现预置判定门"),
                        reason=None if gates else "logs/gates.json 缺失（判定门未前置）")
+        # ── 领域扩展项（--extended）────────────────────────────────────
+        elif name == "伪重复（细胞当独立样本）":
+            # 判据是**分析单位**而不是细胞数：n_cells > n_donors 且下游检验
+            # 直接用细胞当 n —— 这时样本量被虚增两三个数量级，p 必然假阳性。
+            if not pb:
+                rec.update(status="cannot_check",
+                           reason="未提供 --pseudobulk；细胞级分析若未先做供体聚合，"
+                                  "结论一律不得读作独立证据")
+            else:
+                n_donor = int(pb.get("n_donors", 0) or 0)
+                n_cell = int(pb.get("n_cells", 0) or 0)
+                n_low = int(pb.get("n_donors_below_min", 0) or 0)
+                rec.update(status="checked",
+                           evidence=f"供体 {n_donor} / 细胞 {n_cell}"
+                                    + (f"；细胞数不足的供体 {n_low}" if n_low else ""),
+                           conclusion=("已按供体聚合，分析单位是供体"
+                                       if n_donor > 0 else
+                                       "聚合产物里供体数为 0，不得据此宣称做了供体层级检验"))
+        elif name == "整合伪影（信号被批次校正抹掉）":
+            if not fid:
+                rec.update(status="cannot_check",
+                           reason="未提供 --fidelity；批次校正不保证保留任何协变量信号，"
+                                  "缺这一步就无法排除「整合把年龄/处理效应一起抹掉」")
+            else:
+                v = fid.get("verdict")
+                mr = fid.get("min_retention")
+                rec.update(status="checked",
+                           evidence=f"verdict={v}，min_retention={mr}",
+                           conclusion=("整合保留了关键协变量的可解释方差"
+                                       if v == "PASS" else
+                                       "整合**未**通过保真诊断：下游差异分析的结果"
+                                       "不能归因于目标变量（FAIL/WARN/UNINFORMATIVE）"))
+        elif name == "细胞组成变化":
+            if not comp:
+                rec.update(status="cannot_check",
+                           reason="未提供 --composition；表观表达变化可能只来自亚群比例改变")
+            else:
+                n_sig = comp.get("n_significant")
+                rec.update(status="checked",
+                           evidence=f"亚群比例显著项数={n_sig}",
+                           conclusion=("已检验亚群比例随协变量的变化，"
+                                       "表达差异须与组成变化分开解释"
+                                       if n_sig else
+                                       "未检出亚群比例变化（不等于不存在，"
+                                       "取决于检验功效）"))
         else:
             rec.update(reason=f"需人工判断（依赖：{dep or '领域输入'}）")
         results.append(rec)
@@ -150,8 +230,12 @@ def main() -> int:
 
     report = {
         "ok": True,
-        "summary": f"已查 {n_checked} / 无法查 {n_cannot} / 待人工 {n_manual}（共 12 项）",
+        "summary": (f"已查 {n_checked} / 无法查 {n_cannot} / 待人工 {n_manual}"
+                    f"（共 {len(items)} 项"
+                    + ("，含 3 项单细胞/蛋白组扩展" if args.extended else "") + "）"),
         "rule": "无法查的必须写「无法查」，不能写「未见异常」",
+        "extended": bool(args.extended),
+        "n_items": len(items),
         "counts": {"checked": n_checked, "cannot_check": n_cannot,
                    "manual_required": n_manual},
         "items": results,
