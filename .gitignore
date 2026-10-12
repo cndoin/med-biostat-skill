@@ -30,6 +30,13 @@ _run*.err
 _caps*.json
 *.tmp
 
+# 测试自检的运行产物（tests/ 下写的临时工作目录）
+# 实测踩过：19 个文件被误提交 —— 它们每次跑测试内容都会变，
+# 进 git 后每次 diff 都是噪声，还会让人误以为那是"基线数据"（不是）。
+tests/.audit_tmp/
+tests/**/.audit_tmp/
+tests/**/_tmp_*/
+
 # 安装器在本仓库根目录生成的**项目级入口指针**
 # （scripts/install_adapters.py 的产物，正文只在 SKILL.md；
 #   canonical 模板在 adapters/，那才是要入库的）
