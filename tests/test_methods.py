@@ -53,6 +53,7 @@ class TestAllMethodsImportable(unittest.TestCase):
         "causal", "prs", "finemap", "mutational", "spatial", "trajectory", "power",
         "batch", "cellcomm", "gxe", "epigen", "age_onset", "scrublet",
         "lm", "pseudobulk", "specificity", "proteomics", "composition", "druggable",
+        "integration", "figs", "nullcontrol", "paga",
     ]
 
     def test_import_all(self):
@@ -1681,6 +1682,342 @@ class TestLMEngine(unittest.TestCase):
         self.assertIn("BOUND True", out)
 
 
+class TestHarmonyIntegration(unittest.TestCase):
+    """批次整合 + 整合保真诊断（Harmony 移植件，去 torch/sklearn）。"""
+
+    def test_removes_batch_effect_and_keeps_clusters(self):
+        """方向对错：整合后批次混合度下降且生物团**必须**还在。
+
+        θ 取 3 而不是上游默认 2：实测（见 lib/integration.harmonize 的 docstring）
+        默认 θ=2 在这个构造（三批次、偏移接近生物群间距）下整不干净，
+        batch_mixing 的 normalized 只从 2.52 降到 1.49，θ=3 才到 1.18。
+        这条实测结论同时是"别信默认参数"的证据，所以直接写进测试里。
+        """
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import integration as I\n"
+            "rng=np.random.default_rng(1); K=3; n=420\n"
+            "mu=np.array([[3,0],[-3,0],[0,3]],dtype=float)\n"
+            "lab=np.repeat(np.arange(K),n//K)\n"
+            "X=rng.normal(0,0.6,(n,2))+mu[lab]\n"
+            "b=(np.arange(n)%3); X[b==1]+=np.array([4.0,3.0]); X[b==2]+=np.array([-3.5,3.0])\n"
+            "def purity(Z,nn=15):\n"
+            "    G=Z@Z.T; sq=(Z**2).sum(1)\n"
+            "    D=np.sqrt(np.maximum(sq[:,None]+sq[None,:]-2*G,0)); np.fill_diagonal(D,np.inf)\n"
+            "    idx=np.argsort(D,axis=1)[:,:nn]\n"
+            "    return float((lab[idx]==lab[:,None]).mean())\n"
+            "before=I.batch_mixing(X,b)\n"
+            "r=I.harmonize(X,b,max_iter_harmony=10,theta=3.0)\n"
+            "after=I.batch_mixing(r['embedding'],b)\n"
+            "print('BEFORE',round(before['normalized'],3))\n"
+            "print('AFTER',round(after['normalized'],3))\n"
+            "print('PUR_BEFORE',round(purity(X),3))\n"
+            "print('PUR_AFTER',round(purity(r['embedding']),3))\n"
+            "print('FINITE',bool(np.all(np.isfinite(r['embedding']))))\n"
+            "print('STOPPED',r['params']['stopped_by'])\n")
+        v = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        self.assertLess(float(v["AFTER"]), float(v["BEFORE"]),
+                        "整合后批次聚集必须下降")
+        self.assertLess(float(v["AFTER"]), 1.25, "θ=3 时应基本混合到随机水平")
+        self.assertEqual(v["FINITE"], "True")
+        self.assertGreaterEqual(float(v["PUR_AFTER"]), float(v["PUR_BEFORE"]) - 0.05,
+                                "整合不得把生物团揉坏（这是过校正的主要症状）")
+        self.assertIn(v["STOPPED"], ("max_iter", "converged", "objective_increased"))
+
+    def test_fidelity_detects_signal_being_wiped(self):
+        """保真诊断必须**对称敏感**：保住 -> PASS，被抹掉 -> FAIL。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import integration as I\n"
+            "rng=np.random.default_rng(2); n=360\n"
+            "X=rng.normal(0,1,(n,2))\n"
+            "b=(np.arange(n)%2); X[b==1]+=np.array([3.0,2.0])\n"
+            "Z=I.harmonize(X,b,max_iter_harmony=8)['embedding']\n"
+            "age=20+60*(X[:,0]-X[:,0].min())/(X[:,0].max()-X[:,0].min())\n"
+            "f=I.fidelity(X,Z,{'age':age})\n"
+            "print('VERDICT',f['verdict'])\n"
+            "print('INFO',bool(f['table'].iloc[0]['informative']))\n"
+            "print('RET',round(float(f['min_retention']),3))\n"
+            "Zbad=Z.copy(); Zbad[:,0]=rng.normal(size=n)\n"
+            "f2=I.fidelity(X,Zbad,{'age':age})\n"
+            "print('WV',f2['verdict'])\n"
+            "print('WRET',round(float(f2['min_retention']),3))\n"
+            "f3=I.fidelity(X,Z,{'noise':rng.normal(size=n)})\n"
+            "print('UNINFO',f3['verdict'])\n")
+        v = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        # 核心回归点：R²=1（信号最强）时 F=∞、p=0，**不得**被判成 uninformative
+        self.assertEqual(v["INFO"], "True",
+                         "整合前就被完美解释的协变量必须算 informative")
+        self.assertIn(v["VERDICT"], ("PASS", "WARN"))
+        self.assertGreater(float(v["RET"]), 0.4, "至少要留住一半以上的可解释方差")
+        self.assertEqual(v["WV"], "FAIL", "人为抹掉年龄信号必须 FAIL")
+        self.assertLess(float(v["WRET"]), 0.2)
+        self.assertEqual(v["UNINFO"], "UNINFORMATIVE",
+                         "整合前就不可解释的协变量不能拿来宣称保住了信号")
+
+    def test_deterministic_and_negative_inputs(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import integration as I\n"
+            "rng=np.random.default_rng(3); n=200\n"
+            "X=rng.normal(0,1,(n,2)); b=(np.arange(n)%2); X[b==1]+=2.0\n"
+            "Z1=I.harmonize(X,b,max_iter_harmony=5)['embedding']\n"
+            "Z2=I.harmonize(X,b,max_iter_harmony=5)['embedding']\n"
+            "print('REPRO',bool(np.allclose(Z1,Z2)))\n"
+            "res=[]\n"
+            "for desc,fn in [\n"
+            " ('nan', lambda: I.harmonize(np.array([[1.,2.],[np.nan,3.],[1.,1.],[2.,2.]]),[0,0,1,1])),\n"
+            " ('one', lambda: I.harmonize(np.random.default_rng(0).normal(size=(20,2)),[0]*20)),\n"
+            " ('len', lambda: I.harmonize(X,[0,1]*50)),\n"
+            " ('iter0', lambda: I.harmonize(X,b,max_iter_harmony=0)),\n"
+            " ('single-cell-batch', lambda: I.harmonize(np.random.default_rng(0).normal(size=(6,2)),[0,1,2,3,4,5])),\n"
+            " ('3d', lambda: I.harmonize(np.random.default_rng(0).normal(size=(20,3,2)),[0,1]*10)),\n"
+            " ('fidelity-shape', lambda: I.fidelity(X[:10],Z1,{'a':np.arange(200)})),\n"
+            " ('fidelity-empty', lambda: I.fidelity(X,Z1,{})),\n"
+            " ('cov-len', lambda: I.batch_mixing(X,[0,1]*50)),\n"
+            "]:\n"
+            "    try:\n"
+            "        fn(); res.append(desc+'=False')\n"
+            "    except Exception: res.append(desc+'=True')\n"
+            "print('NEG',' '.join(res))\n")
+        lines = out
+        self.assertTrue(all("=True" in t for t in out.split("NEG")[1].split()),
+                        f"负向输入必须报错: {out}")
+        self.assertIn("REPRO True", out)
+
+
+class TestOnsetFigure(unittest.TestCase):
+    """Fig3 失守曲线：纯 SVG、确定性、只在真检出时画失守点。"""
+
+    def test_svg_is_wellformed_and_deterministic(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np, xml.etree.ElementTree as ET\n"
+            "from lib import age_onset as AO, figs as F\n"
+            "rng=np.random.default_rng(7); n=180\n"
+            "ages=rng.uniform(15,85,n)\n"
+            "truth=np.where(ages<45,5.0,5.0-0.06*(ages-45))\n"
+            "expr=truth+rng.normal(0,0.35,n)\n"
+            "r=AO.fit_onset(ages,expr)\n"
+            "svg=F.onset_curve(r,ages=ages,expr=expr,gene_label='CRYAA')\n"
+            "ET.fromstring(svg)\n"
+            "svg2=F.onset_curve(r,ages=ages,expr=expr,gene_label='CRYAA')\n"
+            "print('DETECTED',bool(r['detected']))\n"
+            "print('XML True')\n"
+            "print('SAME',svg==svg2)\n"
+            "print('BAND',svg.count('<polyline')>=2)\n"
+            "print('LABEL','失守点' in svg)\n")
+        self.assertIn("XML True", out)
+        self.assertIn("SAME True", out, "同输入必须出同一张图（可进 git diff）")
+        self.assertIn("BAND True", out)
+        self.assertIn("LABEL True", out)
+
+    def test_no_onset_line_when_not_detected(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import age_onset as AO, figs as F\n"
+            "rng=np.random.default_rng(8); n=160\n"
+            "ages=rng.uniform(15,85,n); expr=rng.normal(5,0.4,n)\n"
+            "r=AO.fit_onset(ages,expr)\n"
+            "svg=F.onset_curve(r,ages=ages,expr=expr)\n"
+            "print('DETECTED',bool(r['detected']))\n"
+            "print('NOLINE',('失守点' not in svg))\n"
+            "print('SAYS','未检出失守' in svg)\n"
+            "res=[]\n"
+            "for desc,fn in [\n"
+            " ('missing', lambda: F.onset_curve({'grid_ages':[1],'grid_fitted':[2]})),\n"
+            " ('lens', lambda: F.onset_curve({**r,'grid_lo':[1.0]})),\n"
+            " ('pts', lambda: F.onset_curve(r,ages=[1,2],expr=[1])),\n"
+            "]:\n"
+            "    try:\n"
+            "        fn(); res.append(desc+'=False')\n"
+            "    except Exception: res.append(desc+'=True')\n"
+            "print('NEG',' '.join(res))\n")
+        self.assertIn("DETECTED False", out)
+        self.assertIn("NOLINE True", out, "未检出时不得画出失守竖线")
+        self.assertIn("SAYS True", out)
+        self.assertTrue(all("=True" in t for t in out.split("NEG")[1].split()),
+                        out)
+
+
+class TestNullControl(unittest.TestCase):
+    """随机匹配基因集零分布（阴性对照的唯一裁决点）。"""
+
+    def test_detects_true_signal_and_controls_false_positive(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import nullcontrol as NC\n"
+            "rng=np.random.default_rng(9); G=600\n"
+            "genes=['g%d'%i for i in range(G)]\n"
+            "expr=rng.gamma(2,1.0,G)\n"
+            "score=0.9*np.log1p(expr)+rng.normal(0,0.5,G)\n"
+            "hi=np.argsort(-expr)[:150]\n"
+            "true=[genes[i] for i in rng.choice(hi,30,replace=False)]\n"
+            "idx={g:i for i,g in enumerate(genes)}\n"
+            "for g in true: score[idx[g]]+=1.5\n"
+            "S=dict(zip(genes,score)); E=dict(zip(genes,expr))\n"
+            "r=NC.gene_set_null(true,S,match_var=E,n_iter=1000,seed=1)\n"
+            "print('TRUEP',round(r['pvalue'],4))\n"
+            "print('TRUEZ',round(r['z'],2))\n"
+            "print('MATCH',r['matching'])\n"
+            "fp=0\n"
+            "for s in range(12):\n"
+            "    rr=np.random.default_rng(100+s)\n"
+            "    rs=[genes[i] for i in rr.choice(G,30,replace=False)]\n"
+            "    fp+=int(NC.gene_set_null(rs,S,match_var=E,n_iter=500,seed=s)['pvalue']<0.05)\n"
+            "print('FP',fp)\n")
+        v = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        self.assertLessEqual(float(v["TRUEP"]), 0.01, "注入的真信号必须检出")
+        self.assertGreater(float(v["TRUEZ"]), 5.0)
+        self.assertEqual(v["MATCH"], "matched")
+        self.assertEqual(int(v["FP"]), 0, "12 次零假设不得有假阳性")
+
+    def test_self_match_is_rejected(self):
+        """把被检验的统计量当匹配变量：零分布方差被压小、z 被放大 —— 必须拦下来。"""
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import nullcontrol as NC\n"
+            "rng=np.random.default_rng(5); G=300\n"
+            "genes=['g%d'%i for i in range(G)]\n"
+            "S={g: float(rng.normal()) for g in genes}\n"
+            "E={g: float(abs(rng.normal())) for g in genes}\n"
+            "res=[]\n"
+            "try:\n"
+            "    NC.gene_set_null(['g1','g2','g3'],S,match_var=S,n_iter=200,seed=0)\n"
+            "    res.append('self=False')\n"
+            "except Exception: res.append('self=True')\n"
+            "for desc,fn in [\n"
+            " ('dup', lambda: NC.gene_set_null(['g1','g1'],S,match_var=E)),\n"
+            " ('missing', lambda: NC.gene_set_null(['ZZZ'],S,match_var=E)),\n"
+            " ('niter', lambda: NC.gene_set_null(['g1'],S,match_var=E,n_iter=50)),\n"
+            " ('stat', lambda: NC.gene_set_null(['g1'],S,match_var=E,statistic='x')),\n"
+            " ('alt', lambda: NC.gene_set_null(['g1'],S,match_var=E,alternative='x')),\n"
+            " ('const', lambda: NC.gene_set_null(['g1','g2','g3'],S,match_var={g:1.0 for g in genes})),\n"
+            " ('empty', lambda: NC.gene_set_null([],S,match_var=E)),\n"
+            "]:\n"
+            "    try:\n"
+            "        fn(); res.append(desc+'=False')\n"
+            "    except Exception: res.append(desc+'=True')\n"
+            "print('NEG',' '.join(res))\n")
+        neg = out.split("NEG")[1].split()
+        self.assertTrue(all("=True" in t for t in neg), out)
+
+    def test_matched_sampling_preserves_expression_strata(self):
+        """配额要真的落在同一层位。
+
+        用**跨多个层位**的待检集来验：若待检基因横跨高、中、低表达各档，
+        对照组的平均表达应当贴近（log 尺度差很小）。
+        另有一条对照：待检集若全落在最顶层（常见的"只挑最显著基因"用法），
+        顶层候选往往不够配额，实现会向外扩展相邻层位 —— 这时**必须**如实报告
+        ``max_expansion > 1``，让使用者知道匹配变粗了，而不是悄悄凑数。
+        """
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import nullcontrol as NC\n"
+            "rng=np.random.default_rng(11); G=400\n"
+            "genes=['g%d'%i for i in range(G)]\n"
+            "expr=rng.lognormal(1.0,1.0,G)\n"
+            "E=dict(zip(genes,expr))\n"
+            "mid=np.argsort(np.abs(expr-np.median(expr)))[:120]\n"
+            "qs=[genes[i] for i in rng.choice(mid,30,replace=False)]\n"
+            "sm=NC.sample_matched(qs,genes,match_var=E,n_iter=300,n_bins=20,seed=1)\n"
+            "ref=float(np.mean([E[g] for g in qs]))\n"
+            "nulls=[float(np.mean([E[g] for g in s])) for s in sm['samples']]\n"
+            "print('REF',round(np.log(ref),3))\n"
+            "print('NULLMEAN',round(np.log(float(np.mean(nulls))),3))\n"
+            "print('SD',round(float(np.std(nulls)),3))\n"
+            "print('N',len(sm['samples'][0]))\n"
+            "print('NODUP',all(len(set(s))==len(s) for s in sm['samples']))\n"
+            "print('SELFEXCLUDED',all(all(g not in set(qs) for g in s) for s in sm['samples']))\n"
+            "print('STRATA',len(sm['quota']))\n"
+            "hi=[genes[i] for i in np.argsort(-expr)[:40]]\n"
+            "sm2=NC.sample_matched(hi,genes,match_var=E,n_iter=100,n_bins=20,seed=1)\n"
+            "print('EXPANDED',int(sm2['max_expansion'])>1)\n"
+            "print('HISIZE',len(sm2['samples'][0]))\n")
+        v = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        self.assertEqual(int(v["N"]), 30, "对照组大小必须等于待检集")
+        self.assertEqual(v["NODUP"], "True", "单次抽样内不得有重复基因（会低估方差）")
+        self.assertEqual(v["SELFEXCLUDED"], "True", "抽样池必须排除待检基因自身")
+        gap = abs(float(v["NULLMEAN"]) - float(v["REF"]))
+        self.assertLess(gap, 0.30, f"随机抽样应复刻表达层位（log 尺度差 {gap:.3f}）")
+        self.assertEqual(v["EXPANDED"], "True",
+                         "顶层候选不够时必须向外扩展相邻层位并如实报告")
+        self.assertEqual(int(v["HISIZE"]), 40)
+
+
+class TestPaga(unittest.TestCase):
+    """PAGA 簇间连通性：期望连边的自洽性 + 拓扑正确性 + 确定性。"""
+
+    def test_recovers_chain_topology(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import paga as P\n"
+            "rng=np.random.default_rng(4); n=130\n"
+            "mu=np.array([[0,0],[2.2,0.3],[4.4,0.1],[0.2,6.0]])\n"
+            "X=np.vstack([rng.normal(m,0.42,(n,2)) for m in mu])\n"
+            "lab=np.repeat(['c0','c1','c2','far'],n)\n"
+            "r=P.paga_connectivity(X,lab,n_neighbors=15)\n"
+            "C=r['connectivity']\n"
+            "print('WITHIN',round(float(np.mean(np.diag(C.to_numpy()))),2))\n"
+            "print('C01',round(float(C.loc['c0','c1']),2))\n"
+            "print('C02',round(float(C.loc['c0','c2']),2))\n"
+            "print('CFAR',round(float(C.loc['c0','far']),2))\n"
+            "t=P.paga_tree(r)\n"
+            "pairs=set((min(a,b),max(a,b)) for a,b in zip(t['edges']['source'],t['edges']['target']))\n"
+            "print('HAS_FAR',('c0','far') in pairs)\n"
+            "print('NEDGE',t['n_edges'])\n"
+            "print('DEPTH',str(P.paga_tree(r,root='c0')['depth'].to_dict()))\n"
+            "print('SYM',bool(np.allclose(r['observed'].to_numpy(),r['observed'].to_numpy().T)))\n"
+            "E=r['expected'].to_numpy(); k=r['n_neighbors']\n"
+            "print('EXPROW',bool(np.allclose(E.sum(axis=1),k*r['cluster_sizes'].to_numpy())))\n"
+            "r2=P.paga_connectivity(X,lab,n_neighbors=15)\n"
+            "print('DET',bool(np.allclose(C.to_numpy(),r2['connectivity'].to_numpy())))\n")
+        v = {l.split()[0]: l.split()[-1] for l in out.splitlines() if l.split()}
+        self.assertGreater(float(v["WITHIN"]), 0.5, "簇内必须比随机更紧凑")
+        self.assertGreater(float(v["C01"]), float(v["C02"]),
+                           "相邻的 c0-c1 必须比隔开的 c0-c2 更连通")
+        self.assertLessEqual(float(v["CFAR"]), float(v["C02"]),
+                             "远离的簇连通性不得高于隔开的簇。"
+                             "注：两者观测连边都是 0 时会被 min_ratio 压到同一下限，"
+                             "只能判 ≤ —— 这是有意为之的下限保护（避免 log 0 = -inf）")
+        self.assertEqual(int(v["NEDGE"]), 3, "4 个簇的生成树应有 3 条边")
+        self.assertEqual(v["HAS_FAR"], "True")
+        self.assertEqual(v["SYM"], "True")
+        self.assertEqual(v["EXPROW"], "True",
+                         "期望连边按行求和必须等于 k·n_a（否则期望口径错了）")
+        self.assertEqual(v["DET"], "True")
+
+    def test_negative_inputs_raise(self):
+        out = _run(
+            "import sys; sys.path.insert(0,'.')\n"
+            "import numpy as np\n"
+            "from lib import paga as P\n"
+            "rng=np.random.default_rng(6); n=80\n"
+            "X=np.vstack([rng.normal([0,0],0.4,(n,2)),rng.normal([3,0],0.4,(n,2))])\n"
+            "lab=np.repeat(['a','b'],n)\n"
+            "res=[]\n"
+            "for desc,fn in [\n"
+            " ('one', lambda: P.paga_connectivity(X,['a']*len(X))),\n"
+            " ('len', lambda: P.paga_connectivity(X,lab[:10])),\n"
+            " ('kbig', lambda: P.paga_connectivity(X,lab,n_neighbors=len(X))),\n"
+            " ('k0', lambda: P.paga_connectivity(X,lab,n_neighbors=0)),\n"
+            " ('root', lambda: P.paga_tree(P.paga_connectivity(X,lab),root='nope')),\n"
+            "]:\n"
+            "    try:\n"
+            "        fn(); res.append(desc+'=False')\n"
+            "    except Exception: res.append(desc+'=True')\n"
+            "print('NEG',' '.join(res))\n")
+        self.assertTrue(all("=True" in t for t in out.split("NEG")[1].split()), out)
+
+
 class TestAttributionHonesty(unittest.TestCase):
     """溯源必须如实：新增来源要登记，许可不得虚报。"""
 
@@ -1703,7 +2040,7 @@ class TestAttributionHonesty(unittest.TestCase):
         for rel in ("vendor/_sc/core.py", "vendor/_wgcna/core.py",
                     "vendor/_batch/core.py", "vendor/_cellcomm/core.py",
                     "vendor/_scrublet/core.py", "vendor/_gam/core.py",
-                    "vendor/_sccoda/core.py"):
+                    "vendor/_sccoda/core.py", "vendor/_harmony/core.py"):
             head = (PKG / rel).read_text(encoding="utf-8")[:700]
             self.assertIn("PORTED-FILE", head, f"{rel} 缺少 PORTED-FILE 声明")
             self.assertTrue(("BSD-3" in head) or ("MIT" in head) or ("Apache" in head),

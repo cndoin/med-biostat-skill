@@ -93,6 +93,11 @@ TIER1 = {
     "lib.proteomics": "蛋白组差异 + **RNA-蛋白断层（唯一裁决点）**：moderated t + 一致/断层/弱断层三分类 + 二项检验",
     "lib.composition": "供体层级差异丰度（成分数据）：Dirichlet-Multinomial + L1 选变量 + 供体 bootstrap（模型源自 scCODA，BSD-3；推断引擎已换底）",
     "lib.druggable": "可成药映射与干预窗口：基因→药物→给药途径分层 + X% 已上市药靶 + 阳性对照门（离线确定性，不碰网络）",
+    # —— v1.10：多组学整合与保真（先整合，再实测整合有没有把信号抹掉）——
+    "lib.integration": "**Harmony 批次整合 + 保真诊断**：去 torch/sklearn 的纯 numpy Harmony、批次混合度、协变量可解释方差保留率（源：harmony-pytorch，BSD-3）",
+    "lib.figs": "**失守曲线图（Fig3）**：GAM 拟合 + 逐点 95% CI 带 + 基线与失守点标注，纯 SVG、同输入必出同一字节（未检出时不画竖线）",
+    "lib.nullcontrol": "**随机匹配基因集零分布（阴性对照唯一裁决点）**：表达层位等配额无放回抽样 + 经验 p + BH；被检验的统计量不得充当匹配变量（否则报错）",
+    "lib.paga": "**PAGA 簇间连通性**：score = log(观测连边/期望连边) + 最小生成树抽象图（期望行和 = k·n_a 自洽；不可与 scanpy 逐位对比）",
 }
 # 每个分析法模块的**可导入性**逐项探测（不靠 tier1_ready 一刀切：
 # 某个模块缺依赖时，其余模块必须照常报可用，否则会误报「功能缺失」）
@@ -102,6 +107,7 @@ LIB_MODULES = [
     "causal", "prs", "finemap", "mutational", "spatial", "trajectory", "power",
     "batch", "cellcomm", "gxe", "epigen", "age_onset", "scrublet",
     "lm", "pseudobulk", "specificity", "proteomics", "composition", "druggable",
+    "integration", "figs", "nullcontrol", "paga",
 ]
 ZERO_DEP_IN_VENDOR = {
     "registry": "函数注册表（中英文检索 + 前置校验，纯标准库）",
