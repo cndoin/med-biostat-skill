@@ -1,8 +1,8 @@
 ---
 name: biostat-copilot
-description: 生信 / 医学研究全流程编排与审计（口径先于数值 · 一致性强于看起来对 · 混杂是主战场 · **数字一律由程序算出，不由 AI 推断**）。**何时自动加载**：用户要动手做、复核或投稿一项医学/生信分析时——如「这个方向能不能做、有没有人做过」「帮我分析这份 GWAS/组学/队列数据」「核对一下我这组结果对不对」「这个药/基因有没有因果证据」「把它写成可投稿的报告」。**覆盖七类形态**：(1) 药物靶点与因果推断——药物靶点 MR、孟德尔随机化（IVW/加权中位数/Egger/众数/RAPS/污染混合 + 异质性、留一、Steiger、Radial）、cis-eQTL/pQTL 工具变量、Wald ratio、共定位 coloc/PP.H4、药物重定位；(2) 遗传关联——GWAS 汇总统计处理与质控、λGC、独立位点与可信集、精细定位、区间基因注释；(3) 组学整合——eQTL/pQTL/TWAS/PWAS、组织与细胞类型富集、单细胞归属；(4) 临床统计——基线表、生存分析、预测模型（区分度+校准度+决策曲线）、C-index/NRI/IDI、竞争风险、混合效应；(5) 差异与通路——差异表达、共表达网络（WGCNA）、富集（ORA/GSEA/GSVA/ssGSEA）、单细胞、**双胞体检测**、批次校正 ComBat、细胞通讯配受体、免疫浸润、空间转录组、拟时序、**跨龄单细胞与年龄失守点**、突变特征；(6) **眼科与白内障（重点方向）**——白内障 GWAS/遗传易感位点、晶状体蛋白基因集（crystallin/MIP/GJA8/EPHA2 等）富集、**人工晶体 IOL 屈光计算（PEARL-DGS 厚透镜 TILP/等效球镜）**、logMAR·Snellen 视力换算、屈光预测误差（ME/MAE/MedAE/±0.5D 内比例）、眼压统计、角膜曲率与眼轴；(7) 数据交付与审计——数据清洗与变量挑选（缺失/离群/共线性 VIF）、数据源分级、**与官方发布的一致性核验（哈希/字节数/逐变异互证）**、混杂十二项审计、外部复现、报告规范对表（STROBE/STROBE-MR/TRIPOD+AI/PRISMA）。**触发词**：生信分析、GWAS、孟德尔随机化、MR、共定位、coloc、eQTL、pQTL、TWAS、富集分析、精细定位、位点、差异表达、WGCNA、共表达网络、生存分析、预测模型、单细胞、聚类、分群、双胞体、doublet、去双胞体、跨龄、跨年龄、年龄轨迹、失守点、年龄失守、衰老轨迹、批次效应、批次校正、ComBat、细胞通讯、配受体、免疫浸润、去卷积、空间转录组、拟时序、突变特征、TMB、蛋白组、PTM、药物靶点、倾向性评分、PSM、IPTW、因果推断、Meta 分析、荟萃分析、LASSO、岭回归、变量筛选、样本量、功效、PRS、多基因风险评分、**白内障、眼科、晶状体、人工晶体、IOL、屈光、眼轴、角膜、视力、logMAR、眼压、青光眼、ophthalmology、cataract、intraocular lens、refractive**、数据清洗、bioinformatics、colocalization、fine-mapping、Mendelian randomization、drug target、single-cell、single cell clustering、pseudotime、doublet detection、age onset、batch effect、ComBat、cell-cell communication、CellPhoneDB。**不触发**：单纯查文献、单纯问概念、单纯要一张图、与医学/生信无关的任务。This skill should be used when a user plans, executes, audits, or writes up a bioinformatics or medical research analysis end-to-end.
+description: 生信 / 医学研究全流程编排与审计（口径先于数值 · 一致性强于看起来对 · 混杂是主战场 · **数字一律由程序算出，不由 AI 推断**）。**何时自动加载**：用户要动手做、复核或投稿一项医学/生信分析时——如「这个方向能不能做、有没有人做过」「帮我分析这份 GWAS/组学/队列数据」「核对一下我这组结果对不对」「这个药/基因有没有因果证据」「把它写成可投稿的报告」。**覆盖七类形态**：(1) 药物靶点与因果推断——药物靶点 MR、孟德尔随机化（IVW/加权中位数/Egger/众数/RAPS/污染混合 + 异质性、留一、Steiger、Radial）、cis-eQTL/pQTL 工具变量、Wald ratio、共定位 coloc/PP.H4、药物重定位；(2) 遗传关联——GWAS 汇总统计处理与质控、λGC、独立位点与可信集、精细定位、区间基因注释；(3) 组学整合——eQTL/pQTL/TWAS/PWAS、组织与细胞类型富集、单细胞归属；(4) 临床统计——基线表、生存分析、预测模型（区分度+校准度+决策曲线）、C-index/NRI/IDI、竞争风险、混合效应；(5) 差异与通路——差异表达、共表达网络（WGCNA）、富集（ORA/GSEA/GSVA/ssGSEA）、单细胞、**双胞体检测**、批次校正 ComBat、细胞通讯配受体、免疫浸润、空间转录组、拟时序、**跨龄单细胞与年龄失守点**、突变特征、**供体层级 pseudobulk 聚合（防伪重复）**、**细胞类型特异性**、**蛋白组差异与 RNA-蛋白断层**、**差异丰度/成分数据检验**、**多批次 Harmony 整合与保真诊断**、**随机匹配基因集阴性对照**、**PAGA 簇间连通性抽象图**、**可成药映射（药靶/给药途径/已上市状态）**；(6) **眼科与白内障（重点方向）**——白内障 GWAS/遗传易感位点、晶状体蛋白基因集（crystallin/MIP/GJA8/EPHA2 等）富集、**人工晶体 IOL 屈光计算（PEARL-DGS 厚透镜 TILP/等效球镜）**、logMAR·Snellen 视力换算、屈光预测误差（ME/MAE/MedAE/±0.5D 内比例）、眼压统计、角膜曲率与眼轴；(7) 数据交付与审计——数据清洗与变量挑选（缺失/离群/共线性 VIF）、数据源分级、**与官方发布的一致性核验（哈希/字节数/逐变异互证）**、混杂十二项审计、外部复现、报告规范对表（STROBE/STROBE-MR/TRIPOD+AI/PRISMA）。**触发词**：生信分析、GWAS、孟德尔随机化、MR、共定位、coloc、eQTL、pQTL、TWAS、富集分析、精细定位、位点、差异表达、WGCNA、共表达网络、生存分析、预测模型、单细胞、聚类、分群、双胞体、doublet、去双胞体、跨龄、跨年龄、年龄轨迹、失守点、年龄失守、衰老轨迹、批次效应、批次校正、ComBat、细胞通讯、配受体、免疫浸润、去卷积、空间转录组、拟时序、突变特征、TMB、蛋白组、PTM、药物靶点、倾向性评分、PSM、IPTW、因果推断、Meta 分析、荟萃分析、LASSO、岭回归、变量筛选、样本量、功效、PRS、多基因风险评分、**白内障、眼科、晶状体、人工晶体、IOL、屈光、眼轴、角膜、视力、logMAR、眼压、青光眼、ophthalmology、cataract、intraocular lens、refractive**、数据清洗、bioinformatics、colocalization、fine-mapping、Mendelian randomization、drug target、single-cell、single cell clustering、pseudotime、doublet detection、age onset、batch effect、ComBat、cell-cell communication、CellPhoneDB。**不触发**：单纯查文献、单纯问概念、单纯要一张图、与医学/生信无关的任务。This skill should be used when a user plans, executes, audits, or writes up a bioinformatics or medical research analysis end-to-end.
 license: MIT
-version: 1.8.0
+version: 1.10.1
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, WebFetch, WebSearch
 agent_created: true
 metadata:
@@ -81,6 +81,26 @@ metadata:
 
 ## 判定门（动手前写好，落盘 `logs/gates.json`）
 
+⚠️ **必须用 `scripts/gates.py` 落盘，不要手写这个文件**（2026-10-12 审查发现）：
+仓库里原先**没有任何脚本会写 gates.json**，而"研究者自由度"那一项恰恰是靠这个
+文件的存在与否来判的 —— 也就是说门禁的输入本身不可审计，门形同虚设。
+现在由 `scripts/gates.py` 负责落盘 + 指纹 + 收紧校验。
+
+```bash
+# S0：动手前定门（阈值必须是结构化的、可机器判定）
+"$PY" "$SK/gates.py" --init --project . \
+  --min-detectable-rate 0.6 --min-age-trends 10 \
+  --min-lambda-gc-headroom 1.1 --min-positive-control-hits 1 \
+  --max-agreement-with-existing 0.95 --max-p-value 0.05 --json
+
+# 每轮分析前后校验：结构 + 指纹（指纹只覆盖判定条件，不含事后填的结果）
+"$PY" "$SK/gates.py" --check --project . --json
+
+# 事后**只允许收紧**（提高阈值），且必须留理由；放宽一律拒绝
+"$PY" "$SK/gates.py" --amend --project . --gate G2 \
+  --min-detectable-rate 0.8 --reason "预检发现检出率偏低" --json
+```
+
 | 门 | 触发时点 | 判定条件（可检验） | 处置 |
 |---|---|---|---|
 | **① 命题门** | S0 完成 | 概念/技术/实体三路径任一命中「命题已被正面回答」 | **停止**，不得换措辞继续 |
@@ -91,6 +111,8 @@ metadata:
 | **⑥ 阴性门** | 全程 | 得「P>0.05 且无解释力」 | **不得包装成阳性**，按阴性写 |
 
 > 门是有效的，但**门的输入必须先经审计**——一个错的输入会让门误触发（实证：原产物误报「阳性对照为 0」，本会误触门 ④）。
+> 同理，**门被手改比门没写更危险**：`gates.py --check` 的指纹就是防这个的，
+> 直接编辑 JSON 会让 `--check` 返回 `ok=false` 且退出码 1。
 
 ## 什么情况下读哪个 reference（按需加载，零常驻成本）
 
@@ -166,13 +188,45 @@ SK="C:/Users/35680/Desktop/科研0.1/biostat-copilot/scripts"
 
 ## 工作流 B：数据 → 结果（用户给「数据集 + 问题」）
 
-1. `doctor.py --json` 确认环境；读 `references/data_sources.md` 定来源层级。
-2. `fetch_parallel.py` 取回（小分块 + 续传 + 零进展检测）→ `verify_integrity.py` 五道核验。
-3. `logs/provenance.json` 冻结版本 + 哈希 + 获取日期。
-4. 先读 `qc_definitions.md` → `qc_gwas.py` 重算质控（口径必填）→ 判定门 ③。
-5. `loci_count.py` 独立位点（LD 优先，距离退化须报窗口 + 敏感性）；`loci_backbone.py` 可信集纯度过滤 + 区间注释。
-6. `confounder_audit.py` 十二项 → `logs/confounder_audit.json`（**无法查的写「无法查」，不能写「未见异常」**）。
-7. 阳性对照 + 阴性对照 → 判定门 ④；内部/外部/正交三级验证。
+> 每一步左边标了它属于**哪一层**——不是装饰，是给你（AI）定位用的：
+> 卡在 S4 就别急着写结论，卡在 S3 就别急着投出去。
+> 任何一步触发判定门，**先处理门再往下走**。
+
+1. **[S0] 定门**：`gates.py --init` 把六道判定门**在动手前**落盘。
+   数据已经给到、但门还没定 → 顺序就是错的（见「判定门」小节）。
+2. **[S1] 数据**：`doctor.py --json` 确认环境；读 `references/data_sources.md` 定来源层级。
+3. **[S1] 取回**：`fetch_parallel.py` 取回（小分块 + 续传 + 零进展检测）→ `verify_integrity.py` 五道核验。
+4. **[S1] 溯源**：`logs/provenance.json` 冻结版本 + 哈希 + 获取日期 → 判定门 ②。
+5. **[S2] 质控**：先读 `qc_definitions.md` → `qc_gwas.py` 重算质控（口径必填）→ 判定门 ③。
+6. **[S3] 分析**：`loci_count.py` 独立位点（LD 优先，距离退化须报窗口 + 敏感性）；`loci_backbone.py` 可信集纯度过滤 + 区间注释。
+7. **[S4] 偏倚**：`confounder_audit.py` 十二项 → `logs/confounder_audit.json`（**无法查的写「无法查」，不能写「未见异常」**）；单细胞/蛋白组加 `--extended`（见上）。
+8. **[S4 + S5] 对照与验证**：阳性对照 + 阴性对照 → 判定门 ④；内部/外部/正交三级验证。
+9. **[S7] 自检**：`gates.py --check` 确认门没有被改过（指纹）；`tests/run_all.py` 若改过代码。
+10. **[S6] 产出**：走工作流 D。
+
+**层与"不通过会怎样"的对应**：这张十层表不是分类学，是**止损点清单**——
+每一层都写明了"卡在这里会怎样"，因为绝大多数翻车不是算错，是**没在那一层停**。
+
+## 混杂审计的领域扩展（单细胞 / 蛋白组必读）
+
+混杂十二项是**为 GWAS / MR / 队列**设计的。对细胞级与组学分析，它漏掉了三类
+该领域的主要混杂，而它们**都不报错**（2026-10-12 逻辑框架审查补上）：
+
+| 扩展项 | 漏掉的后果 | 判据入口 |
+|---|---|---|
+| 13 伪重复（细胞当独立样本） | 样本量虚增两三个数量级 → p 必然假阳性 | `lib.pseudobulk` + `--pseudobulk` |
+| 14 整合伪影（信号被批次校正抹掉） | 年龄/处理效应被抹平 → Fig3 找不到失守点，误判"本来就没有" | `lib.integration.fidelity` + `--fidelity` |
+| 15 细胞组成变化 | 表观"某基因上调"其实只是某亚群比例变了 | `lib.composition` + `--composition` |
+
+```bash
+"$PY" "$SK/confounder_audit.py" --project . --extended \
+  --pseudobulk logs/pseudobulk.json --fidelity logs/fidelity.json \
+  --composition logs/composition.json --json
+```
+
+十二项的**编号与 `references/confounders.md` 保持不变**（插新项会打断既有对照，
+"共 N 项"这个口径一改，历年审计报告就不可比），扩展项并列追加、由 `--extended` 打开。
+缺任一输入时状态是 `cannot_check` 并写明为什么查不了 —— **不是**"未见异常"。
 
 ## 工作流 C：审计已有结果（用户要「帮我核对」）
 
@@ -506,11 +560,19 @@ rep = prep.prep_pipeline(matrix, names=[...])
 
 ```bash
 "$PY" "$SK/trigger_check.py" --json
-# 期望：正向覆盖 12/12、误触发 0、边界声明 有
+# 期望：正向覆盖 39/39、误触发 0/4、边界声明 有
 ```
 
-该检查**能失败**：首次运行时确有 1 条漏触发（「数据与官方是否一致」缺「哈希/互证」概念），已补进 description。
-**改了能力范围后先跑它，再重装。**
+该检查**能失败**，而且实测失败过两次：
+1. 首次运行时漏触发 1 条（「数据与官方是否一致」缺「哈希/互证」概念）；
+2. 2026-10-12 加完 v1.9/v1.10 十件能力后补 8 条新用例 → **立刻掉到 34/39**，
+   说明新能力的词一个都没进 description（用户按方法名提问就不会自动加载）。
+   已把供体层级/pseudobulk、特异性、蛋白组断层、差异丰度、Harmony 保真、
+   阴性对照、PAGA、可成药补进 description → 39/39。
+
+**纪律：每加一类分析能力，先在 `scripts/trigger_check.py` 加一条正向用例，
+看到它 FAIL，再去补 description，最后必须跑到全绿。**
+跳过第一步就等于放弃了这条门禁。
 
 ## 跨 Agent 安装
 

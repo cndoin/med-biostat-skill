@@ -7,7 +7,7 @@
 
 **面向生信与医学研究的「证据优先」工作流技能 —— 43 个主流分析法，AI 直接可跑。**
 
-[![版本](https://img.shields.io/badge/version-1.10.0-0d9488)](VERSION)
+[![版本](https://img.shields.io/badge/version-1.10.1-0d9488)](VERSION)
 [![许可证: MIT](https://img.shields.io/badge/License-MIT-8b5cf6.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-2563eb)](#环境要求)
 [![自检](https://img.shields.io/badge/self--check-216%20%2F%20219-16a34a)](tests/run_all.py)
